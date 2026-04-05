@@ -1,0 +1,117 @@
+# ==============================================
+# STREAMLIT SPECIFIC
+# ==============================================
+# Streamlit config and credentials
+.streamlit/secrets.toml
+# Streamlit cache and temp files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+# Streamlit runtime data
+.streamlit/config.toml.bak
+.streamlit/runtime/
+
+# ==============================================
+# PYTHON VIRTUAL ENVIRONMENTS
+# ==============================================
+# Local venv (your .venv folder)
+.venv/
+venv/
+env/
+ENV/
+# Virtualenv wrapper
+.venv-win/
+env-win/
+
+# ==============================================
+# PYTHON CACHE & TOOLS
+# ==============================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+# PyInstaller output (your EXE builds)
+dist/
+build/
+*.spec
+# streamlit-desktop-app builds
+output/
+*.exe
+
+# ==============================================
+# SECRETS & SENSITIVE FILES (NEVER COMMIT THESE!)
+# ==============================================
+# API keys, credentials, private data
+secrets.toml
+.env
+.env.*
+!.env.example
+config.json
+credentials.json
+
+# ==============================================
+# DATA FILES (OPTIONAL: ignore large data files)
+# ==============================================
+# Uncomment if you want to ignore local data
+#data/*.csv
+data/*.xlsx
+data/*.parquet
+data/*.json
+data/*.zip
+
+# ==============================================
+# WINDOWS SYSTEM FILES
+# ==============================================
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+
+# ==============================================
+# LINUX / MAC SYSTEM FILES
+# ==============================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+.directory
+
+# ==============================================
+# EDITOR / IDE FILES
+# ==============================================
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.bak
+
+# ==============================================
+# LOGS & TEMP FILES
+# ==============================================
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+
