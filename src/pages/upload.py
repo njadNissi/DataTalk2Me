@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import os
 from src.core import feature_analysis as fan
+import src.core.dataset_processing as dsp
 
 # =========================================================
 # 🔐 STATE INITIALIZATION
@@ -73,12 +74,14 @@ def render():
 
         if uploaded_file:
             df = pd.read_csv(uploaded_file)
+            st.session_state["uploaded_file_name"] = uploaded_file.name
             st.session_state["history"] = [("Uploaded File", df.copy())]
             update_data(df)
 
         if df is not None:
-            st.caption(f"Rows: {len(df)} | Columns: {len(df.columns)}")
-            st.dataframe(df)
+            st.caption(f"Rows: {len(df)} | Columns: {len(df.columns)} | Sample dataset")
+            sample_df = dsp.get_representative_sample(df, target_col=None, sample_size=150)
+            st.dataframe(sample_df, height=600)
             if st.button("🗑️ Release file"):
                 init_state()
                 st.success("✅ File released")
@@ -101,16 +104,19 @@ def render():
 
             n_rows = st.number_input("Number of rows", min_value=1, value=10)
 
-            if st.button("➕ Create Dataset"):
-                df = pd.DataFrame({
-                    "x0": ["0"]*n_rows,
-                    "x1": ["0"]*n_rows,
-                    "y": ["0"]*n_rows
-                })
+            try:
+                if st.button("➕ Create Dataset"):
+                    df = pd.DataFrame({
+                        "x0": ["0"]*n_rows,
+                        "x1": ["0"]*n_rows,
+                        "y": ["0"]*n_rows
+                    })
 
-                st.session_state["history"] = [("Created Dataset", df.copy())]
-                update_data(df)
-                st.rerun()
+                    st.session_state["history"] = [("Created Dataset", df.copy())]
+                    update_data(df)
+                    st.rerun()
+            except Exception as e:
+                st.error(f"❌ Error: {e}")
 
         else:
             st.caption(f"Rows: {len(df)} | Columns: {len(df.columns)}")
@@ -189,7 +195,11 @@ def render():
                             "max": max,
                             "sum": sum,
                             'list': list,
-                            'dict': dict
+                            'dict': dict,
+                            'int': int,
+                            'float': float,
+                            'str': str,
+                            'bool': bool
                         }
                         exec(user_code, global_env, local_env)
 

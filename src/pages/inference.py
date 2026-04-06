@@ -1,3 +1,4 @@
+import time
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -6,15 +7,14 @@ from sklearn.metrics import (
     accuracy_score, f1_score, confusion_matrix,
     mean_squared_error, r2_score
 )
-from sklearn.linear_model import LinearRegression, LogisticRegression
-from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
-from sklearn.neural_network import MLPClassifier, MLPRegressor
+from sklearn.tree import plot_tree, export_graphviz
 import matplotlib.pyplot as plt
 import seaborn as sns
+import graphviz
+from src.core.ai_models import get_model, get_available_models
 
 
 def plot_clean_cm(y_test, y_pred, class_names=None, cbar=False):
-    size = 100 // len(set(y_test))  # Adjust size based on number of classes
     if class_names:
         cm = confusion_matrix(y_test, y_pred, labels=class_names)
         fig, ax = plt.subplots(figsize=(5, 4))
@@ -43,34 +43,40 @@ def plot_clean_cm(y_test, y_pred, class_names=None, cbar=False):
             cbar=cbar,
             # annot_kws={"weight": "bold", "size": size}
         )
-    ax.set_title("Confusion Matrix", fontsize=12, pad=10)
+    ax.set_title(f"Confusion Matrix | {st.session_state.get('model_name', 'Unknown')}", fontsize=12, pad=10)
     ax.set_xlabel("Predicted Label", fontsize=12)
     ax.set_ylabel("True Label", fontsize=12)
     plt.tight_layout()
     return fig
 
 
-# =========================================================
-# 🧠 MODEL FACTORY (FULL ORIGINAL)
-# =========================================================
-def get_model(task, model_name):
-    if task == "classification":
-        if model_name == "Logistic Regression":
-            return LogisticRegression(max_iter=1000)
-        elif model_name == "Decision Tree":
-            return DecisionTreeClassifier()
-        elif model_name == "Neural Network":
-            return MLPClassifier(hidden_layer_sizes=(256, 128, 64, 32), max_iter=1000, early_stopping=True)
-    elif task == "regression":
-        if model_name == "Linear Regression":
-            return LinearRegression()
-        elif model_name == "Decision Tree":
-            return DecisionTreeRegressor()
-        elif model_name == "Neural Network":
-            return MLPRegressor(hidden_layer_sizes=(256, 128, 64, 32), max_iter=1000, early_stopping=True)
-    return None
+def generate_svg(model, feature_names, target_col=None):
+    try:
+        target_enc = st.session_state.get(f"{target_col}_enc", None)
+        dot_data = export_graphviz(
+            model,
+            out_file=None,
+            feature_names=st.session_state.get("feature_names"),
+            class_names= target_enc.classes_.tolist() if target_enc is not None else None,
+            filled=True,
+            rounded=True,
+            special_characters=True
+        )
 
-# =========================================================
+        graph = graphviz.Source(dot_data)
+        svg_data = graph.pipe(format="svg")
+
+        st.download_button(
+            label="📥 Download Tree as SVG",
+            data=svg_data,
+            file_name="decision_tree.svg",
+            mime="image/svg+xml"
+        )
+
+    except Exception as e:
+        st.warning(f"Could not export tree: {e}")
+
+
 # 📝 TEACHING FORMULA (SAFE: NO TARGET IN FEATURES)
 # =========================================================
 def get_linear_regression_formula(model, feature_names, target_name):
@@ -93,9 +99,9 @@ def evaluate_model(task:str, target:str, use_encoded:bool=False):
         st.warning("Train the model first to see evaluation metrics.")
         return
      
+    y_test = st.session_state[f"{target}_test"]
+    y_pred = st.session_state[f"{target}_pred"]
     if task == "classification":
-        y_test = st.session_state[f"{target}_test"]
-        y_pred = st.session_state[f"{target}_pred"]
         labels_display = None
 
         if not use_encoded: # back to original labels for better interpretability
@@ -111,13 +117,12 @@ def evaluate_model(task:str, target:str, use_encoded:bool=False):
             y_test_disp = y_test
             y_pred_disp = y_pred
         
-        st.write("Accuracy:", accuracy_score(y_test_disp, y_pred_disp))
-        st.write("F1:", f1_score(y_test_disp, y_pred_disp, average="weighted"))
+        st.write(f"Accuracy: {accuracy_score(y_test_disp, y_pred_disp)}, F1 Score: {f1_score(y_test_disp, y_pred_disp, average='weighted')}")
         
         if labels_display is not None:
-            st.pyplot(plot_clean_cm(y_test_disp, y_pred_disp, class_names=labels_display))
+            st.pyplot(plot_clean_cm(y_test_disp, y_pred_disp, class_names=labels_display), width=1000)
         else:
-            st.pyplot(plot_clean_cm(y_test_disp, y_pred_disp))
+            st.pyplot(plot_clean_cm(y_test_disp, y_pred_disp), width=1000)
 
     else: # Regression
         scaler_y = st.session_state.get("scaler_y")
@@ -126,17 +131,16 @@ def evaluate_model(task:str, target:str, use_encoded:bool=False):
             y_test = scaler_y.inverse_transform(y_test.values.reshape(-1, 1)).flatten()
             y_pred = scaler_y.inverse_transform(y_pred.reshape(-1, 1)).flatten()
 
-        st.write("MSE:", mean_squared_error(y_test, y_pred))
-        st.write("R2:", r2_score(y_test, y_pred))
+        st.write(f"MSE: {mean_squared_error(y_test, y_pred)}, R2: r2_score(y_test, y_pred)")
 
         # =============================
         # ✅ FORMULA
         # =============================
-        st.subheader("📝 Regression Formula (Teaching)")
+        st.subheader("📝 Regression Formula")
+        model_name = st.session_state.get("trained_model", "Linear Regression")
         if model_name == "Linear Regression":
             formula = get_linear_regression_formula(model, feature_cols, target)
             st.markdown(formula)
-
 
 
 # =========================================================
@@ -148,88 +152,99 @@ def render():
     if df is None:
         st.warning("⚠️ No dataset loaded")
         return
-    st.write(f"Dataset shape: {df.shape}")
 
-    # =====================================================
-    # 🎯 TARGET
-    # =====================================================
-    target = st.selectbox("Select target column", df.columns, index=len(df.columns.tolist()) - 1)
-    st.session_state["target"] = target
 
-    feature_cols = [col for col in df.columns if col != target]
-    X = df[feature_cols]
-    y = df[target]
+    left, right = st.columns(2)
+    with left:
+        st.write(f"Uploaded Dataset: {st.session_state.get('uploaded_file_name', 'Unknown')}, shape: {df.shape}")
+        # =====================================================
+        # 🎯 TARGET
+        # =====================================================
+        target = st.selectbox("Select target column", df.columns, index=len(df.columns.tolist()) - 1)
+        st.session_state["target"] = target
 
-    st.caption("Features properties:")
-    st.write("Used for prediction:", feature_cols)
-    st.write("Scaler type:", st.session_state.get("scaler"))
-    st.write("Scaled columns:", st.session_state.get("scaled_columns"))
-    st.write("Encoded features:", [f for f in feature_cols if f in st.session_state.get(f"{f}_enc", [])])
-    st.caption("Target properties:")
-    st.write("Scaler type:", st.session_state.get("scaler_y"))
-    st.write("Mean value:", y.mean())
-    st.write("Standard deviation:", y.std())
+        feature_cols = [col for col in df.columns if col != target]
+        X = df[feature_cols]
+        y = df[target]
+
+        st.caption("Target properties:")
+        st.write("Scaler type:", st.session_state.get("scaler_y"))
+        st.write("Mean value:", y.mean())
+        st.write("Standard deviation:", y.std())
+
+    with right:
+        st.caption("Features properties:")
+        st.write("Used for prediction:", feature_cols)
+        st.write("Scaler type:", st.session_state.get("scaler"))
+        st.write("Scaled columns:", st.session_state.get("scaled_columns"))
+        st.write("Encoded features:", [f for f in feature_cols if f in st.session_state.get(f"{f}_enc", [])])
 
     # =====================================================
     # 🧠 TASK TYPE
     # =====================================================
-    task = st.radio("Task type", ["classification", "regression"])
+    task_choice, model_choice, test_size_choice, train_btn = st.columns([1, 3, 4, 2])
+    with task_choice:
+        task = st.radio("Task type", ["classification", "regression"])
 
     # =====================================================
     # 🤖 MODEL (FULL ORIGINAL)
     # =====================================================
-    if task == "classification":
+    with model_choice:
         model_name = st.selectbox(
-            "Model",
-            ["Logistic Regression", "Decision Tree", "Neural Network"]
+            "Model", get_available_models(task)
         )
-    else:
-        model_name = st.selectbox(
-            "Model",
-            ["Linear Regression", "Decision Tree", "Neural Network"]
-        )
+        st.session_state["model_name"] = model_name
 
     # =====================================================
     # ⚙️ SPLIT
     # =====================================================
-    test_size = st.slider("Test size", 0.1, 0.5, 0.2)
+    with test_size_choice:
+        test_size = st.slider("Test size", 0.1, 0.5, 0.2)
 
     # =====================================================
     # 🚀 TRAIN
     # =====================================================
-    if st.button("🚀 Train Model"):
-        try:
-            # 🔴 LOADER STARTS HERE
-            with st.spinner("🔄 Training model, please wait..."):
-                # Optional progress bar (visual feedback)
-                progress_bar = st.progress(0)
+    with train_btn:
+        if st.button("🚀 Train Model"):
+            try:
+                # 🔴 LOADER STARTS HERE
+                with st.spinner("🔄 Training model, please wait..."):
+                    # Optional progress bar (visual feedback)
+                    progress_bar = st.progress(0)
 
-                model = get_model(task, model_name)
-                X_train, X_test, y_train, y_test = train_test_split(
-                    X, y, test_size=test_size, random_state=42
-                )
-                progress_bar.progress(40)
+                    model = get_model(task, st.session_state["model_name"])
+                    X_train, X_test, y_train, y_test = train_test_split(
+                        X, y, test_size=test_size, random_state=42
+                    )
+                    progress_bar.progress(40)
 
-                # Training happens here
-                model.fit(X_train, y_train)
-                progress_bar.progress(80)
+                    # Training happens here
+                    model.fit(X_train, y_train)
+                    progress_bar.progress(80)
 
-                y_pred = model.predict(X_test)
-                progress_bar.progress(100)
+                    y_pred = model.predict(X_test)
+                    progress_bar.progress(100)
 
-                st.session_state["y_test"] = y_test
-                st.session_state["y_pred"] = y_pred
-            # 🔴 LOADER AUTOMATICALLY STOPS HERE
+                    st.session_state["y_test"] = y_test
+                    st.session_state["y_pred"] = y_pred
+                # 🔴 LOADER AUTOMATICALLY STOPS HERE
 
-            st.session_state["trained_model"] = model
-            st.session_state["X_columns"] = feature_cols
+                st.session_state["trained_model"] = model
+                st.session_state["feature_names"] = feature_cols
 
-            st.success("✅ Model trained successfully!")
+                train_success = st.empty()
+                train_success.success("✅ Model trained successfully!")
+                time.sleep(0.5)
+                train_success.empty()
+                
+                # Visualize decision tree if applicable 
+                if st.session_state["model_name"] == "Decision Tree":
+                    generate_svg(st.session_state["trained_model"], feature_cols, target_col=target) 
 
-        except Exception as e:
-            st.error(f"❌ Training failed: {e}")
+            except Exception as e:
+                st.error(f"❌ Training failed: {e}")
 
-    
+   
     # =============================
     # 📊 EVALUATION
     # =============================
@@ -249,7 +264,7 @@ def render():
             return
 
         model = st.session_state["trained_model"]
-        cols = st.session_state["X_columns"]
+        cols = st.session_state["feature_names"]
         scaler_X = st.session_state.get("scaler")
         scaled_cols = st.session_state.get("scaled_columns", [])
         scaler_y = st.session_state.get("scaler_y")
