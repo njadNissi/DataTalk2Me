@@ -83,6 +83,7 @@ def render():
             sample_df = dsp.get_representative_sample(df, target_col=None, sample_size=150)
             st.dataframe(sample_df, height=600)
             if st.button("🗑️ Release file"):
+                
                 init_state()
                 st.success("✅ File released")
                 st.rerun()
@@ -217,7 +218,7 @@ def render():
                                     arr = arr.astype(np.int64)
                                 except:
                                     arr, le = fan.encode_labels(arr.astype(str))
-                                    st.session_state[f"{col_name}_enc"] = le  # Store encoder for potential inverse transform
+                                    st.session_state[f"{col_name}_encoder"] = le  # Store encoder for potential inverse transform
 
                                     # show the changes
                                     clean_classes = [str(cls) for cls in le.classes_]

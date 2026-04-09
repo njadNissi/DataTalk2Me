@@ -74,22 +74,22 @@ def render():
     # =====================================================
     df_processed = df.copy()
 
-    scaler_X = None
-    scaler_y = None
+    features_scaler = None
+    target_scaler = None
 
     # -------- Feature scaling --------
     if scaler_type != "None" and len(selected_cols) > 0:
 
-        scaler_X = StandardScaler() if scaler_type == "StandardScaler" else MinMaxScaler()
+        features_scaler = StandardScaler() if scaler_type == "StandardScaler" else MinMaxScaler()
 
-        df_processed[selected_cols] = scaler_X.fit_transform(df[selected_cols])
+        df_processed[selected_cols] = features_scaler.fit_transform(df[selected_cols])
 
     # -------- Label scaling --------
     if scale_label:
 
-        scaler_y = StandardScaler() if label_scaler_type == "StandardScaler" else MinMaxScaler()
+        target_scaler = StandardScaler() if label_scaler_type == "StandardScaler" else MinMaxScaler()
 
-        y_scaled = scaler_y.fit_transform(df[[target]])
+        y_scaled = target_scaler.fit_transform(df[[target]])
         df_processed[target] = y_scaled
 
     # =====================================================
@@ -106,8 +106,8 @@ def render():
         st.session_state["data"] = df_processed
 
         # ---- Feature scaling info ----
-        if scaler_X is not None:
-            st.session_state["scaler"] = scaler_X
+        if features_scaler is not None:
+            st.session_state["scaler"] = features_scaler
             st.session_state["scaled_columns"] = selected_cols
         else:
             st.session_state.pop("scaler", None)
@@ -115,10 +115,10 @@ def render():
 
         # ---- Label scaling info ----
         if scale_label:
-            st.session_state["scaler_y"] = scaler_y
+            st.session_state["target_scaler"] = target_scaler
             st.session_state["target_scaled"] = True
         else:
-            st.session_state.pop("scaler_y", None)
+            st.session_state.pop("target_scaler", None)
             st.session_state["target_scaled"] = False
 
         st.success("✅ Changes applied")
@@ -131,7 +131,7 @@ def render():
         st.session_state["data"] = st.session_state["raw_data"].copy()
 
         # Clear all pipeline info
-        for key in ["scaler", "scaled_columns", "scaler_y", "target_scaled"]:
+        for key in ["scaler", "scaled_columns", "target_scaler", "target_scaled"]:
             st.session_state.pop(key, None)
 
         st.success("🔄 Reset successful")

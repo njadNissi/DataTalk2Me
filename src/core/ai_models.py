@@ -143,3 +143,18 @@ def get_available_models(task):
         return []
 
         
+def get_linear_regression_formula(model, feature_names, target_name):
+    intercept = model.intercept_
+    coefs = model.coef_
+
+    if isinstance(feature_names, tuple):
+        feature_names = feature_names[0]
+
+    parts = [f"{intercept:.4f}"]
+    for coef, feat in zip(coefs, feature_names):
+        if coef >= 0:
+            parts.append(f"+ {coef:.4f} × `{feat}`")
+        else:
+            parts.append(f"- {abs(coef):.4f} × `{feat}`")
+
+    return f"### {target_name} = {' '.join(parts)}"

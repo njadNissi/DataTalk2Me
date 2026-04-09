@@ -11,9 +11,7 @@ from sklearn.tree import plot_tree, export_graphviz
 import matplotlib.pyplot as plt
 import seaborn as sns
 import graphviz
-from src.core.ai_models import get_model, get_available_models
-
-
+import src.core.ai_models as AIM
 def plot_clean_cm(y_test, y_pred, class_names=None, cbar=False):
     if class_names:
         cm = confusion_matrix(y_test, y_pred, labels=class_names)
@@ -52,7 +50,7 @@ def plot_clean_cm(y_test, y_pred, class_names=None, cbar=False):
 
 def generate_svg(model, feature_names, target_col=None):
     try:
-        target_enc = st.session_state.get(f"{target_col}_enc", None)
+        target_enc = st.session_state.get(f"{target_col}_encoder", None)
         dot_data = export_graphviz(
             model,
             out_file=None,
@@ -77,36 +75,20 @@ def generate_svg(model, feature_names, target_col=None):
         st.warning(f"Could not export tree: {e}")
 
 
-# 📝 TEACHING FORMULA (SAFE: NO TARGET IN FEATURES)
-# =========================================================
-def get_linear_regression_formula(model, feature_names, target_name):
-    intercept = model.intercept_
-    coefs = model.coef_
-
-    parts = [f"{intercept:.4f}"]
-    for coef, feat in zip(coefs, feature_names):
-        if coef >= 0:
-            parts.append(f"+ {coef:.4f} × {feat}")
-        else:
-            parts.append(f"- {abs(coef):.4f} × {feat}")
-
-    formula = f"**{target_name} = {' '.join(parts)}**"
-    return formula
-
-
 def evaluate_model(task:str, target:str, use_encoded:bool=False):
     if not "y_test" in st.session_state or not "y_pred" in st.session_state:
         st.warning("Train the model first to see evaluation metrics.")
         return
-     
-    y_test = st.session_state[f"{target}_test"]
-    y_pred = st.session_state[f"{target}_pred"]
+
+    model_name = st.session_state["model_name"]
+    y_test = st.session_state["y_test"]
+    y_pred = st.session_state["y_pred"]
     if task == "classification":
         labels_display = None
 
         if not use_encoded: # back to original labels for better interpretability
             try:
-                target_enc = st.session_state.get(f"{target}_enc")
+                target_enc = st.session_state.get(f"{target}_encoder")
                 y_test_disp = target_enc.inverse_transform(y_test)
                 y_pred_disp = target_enc.inverse_transform(y_pred)
                 labels_display = target_enc.classes_.tolist()
@@ -117,7 +99,9 @@ def evaluate_model(task:str, target:str, use_encoded:bool=False):
             y_test_disp = y_test
             y_pred_disp = y_pred
         
-        st.write(f"Accuracy: {accuracy_score(y_test_disp, y_pred_disp)}, F1 Score: {f1_score(y_test_disp, y_pred_disp, average='weighted')}")
+        acc = accuracy_score(y_test_disp, y_pred_disp)
+        f1 = f1_score(y_test_disp, y_pred_disp, average='weighted')
+        st.subheader(f"📊 {model_name} Evaluation: `Accuracy: {acc*100:.2f}% ({acc})` | `F1 Score: {f1*100:.2f}% ({f1})`")
         
         if labels_display is not None:
             st.pyplot(plot_clean_cm(y_test_disp, y_pred_disp, class_names=labels_display), width=1000)
@@ -125,21 +109,25 @@ def evaluate_model(task:str, target:str, use_encoded:bool=False):
             st.pyplot(plot_clean_cm(y_test_disp, y_pred_disp), width=1000)
 
     else: # Regression
-        scaler_y = st.session_state.get("scaler_y")
+        target_scaler = st.session_state.get("target_scaler")
         target_scaled = st.session_state.get("target_scaled", False)
-        if target_scaled and scaler_y is not None:
-            y_test = scaler_y.inverse_transform(y_test.values.reshape(-1, 1)).flatten()
-            y_pred = scaler_y.inverse_transform(y_pred.reshape(-1, 1)).flatten()
+        if target_scaled and target_scaler is not None:
+            y_test = target_scaler.inverse_transform(y_test.values.reshape(-1, 1)).flatten()
+            y_pred = target_scaler.inverse_transform(y_pred.reshape(-1, 1)).flatten()
 
-        st.write(f"MSE: {mean_squared_error(y_test, y_pred)}, R2: r2_score(y_test, y_pred)")
+        
+        mse = mean_squared_error(y_test, y_pred)
+        r2 = r2_score(y_test, y_pred)
+        st.subheader(f"📊 {model_name} Evaluation: `MSE: {mse}` | `R²: {r2 * 100:.2f}% ({r2})`")
 
         # =============================
         # ✅ FORMULA
         # =============================
-        st.subheader("📝 Regression Formula")
-        model_name = st.session_state.get("trained_model", "Linear Regression")
         if model_name == "Linear Regression":
-            formula = get_linear_regression_formula(model, feature_cols, target)
+            model = st.session_state["trained_model"]
+            feature_names = st.session_state["feature_names"],
+            st.subheader("📝 Regression Formula")
+            formula = AIM.get_linear_regression_formula(model, feature_names, target)
             st.markdown(formula)
 
 
@@ -164,11 +152,12 @@ def render():
         st.session_state["target"] = target
 
         feature_cols = [col for col in df.columns if col != target]
+        st.session_state["feature_names"] = feature_cols
         X = df[feature_cols]
         y = df[target]
 
         st.caption("Target properties:")
-        st.write("Scaler type:", st.session_state.get("scaler_y"))
+        st.write("Scaler type:", st.session_state.get("target_scaler"))
         st.write("Mean value:", y.mean())
         st.write("Standard deviation:", y.std())
 
@@ -191,7 +180,7 @@ def render():
     # =====================================================
     with model_choice:
         model_name = st.selectbox(
-            "Model", get_available_models(task)
+            "Model", AIM.get_available_models(task)
         )
         st.session_state["model_name"] = model_name
 
@@ -212,7 +201,7 @@ def render():
                     # Optional progress bar (visual feedback)
                     progress_bar = st.progress(0)
 
-                    model = get_model(task, st.session_state["model_name"])
+                    model = AIM.get_model(task, st.session_state["model_name"])
                     X_train, X_test, y_train, y_test = train_test_split(
                         X, y, test_size=test_size, random_state=42
                     )
@@ -230,7 +219,6 @@ def render():
                 # 🔴 LOADER AUTOMATICALLY STOPS HERE
 
                 st.session_state["trained_model"] = model
-                st.session_state["feature_names"] = feature_cols
 
                 train_success = st.empty()
                 train_success.success("✅ Model trained successfully!")
@@ -250,8 +238,10 @@ def render():
     # =============================
     if "y_test" in st.session_state and "y_pred" in st.session_state:
         st.markdown("---")
-        st.subheader("📊 Evaluation")
-        use_encoded = st.checkbox("Use encoded labels on the confusion matrix", value=False)
+
+        if task_choice == "classification":
+            use_encoded = st.checkbox("Use encoded labels on the confusion matrix", value=False)
+        else: use_encoded = False;
         evaluate_model(task, target, use_encoded)
 
         # =====================================================
@@ -265,36 +255,53 @@ def render():
 
         model = st.session_state["trained_model"]
         cols = st.session_state["feature_names"]
-        scaler_X = st.session_state.get("scaler")
+        features_scaler = st.session_state.get("scaler")
         scaled_cols = st.session_state.get("scaled_columns", [])
-        scaler_y = st.session_state.get("scaler_y")
+        target_scaler = st.session_state.get("target_scaler")
         target_scaled = st.session_state.get("target_scaled", False)
 
+        # Split the columns into chunks of 5 for each row
         input_data = {}
-        for col in cols:
-            val = st.number_input(col, value=0.0)
-            input_data[col] = val
+        cols_per_row = 10
+        for i in range(0, len(cols), cols_per_row):
+            # Get the next 5 columns for this row
+            row_cols = cols[i:i+cols_per_row]
+            
+            # Create Streamlit columns for the row
+            st_cols = st.columns(len(row_cols))  # Makes 5 equal-width columns
+            
+            # Add one number input per column in the row
+            for idx, col_name in enumerate(row_cols):
+                with st_cols[idx]:
+                    val = st.number_input(col_name, value=0.0, format="%.4f")
+                    input_data[col_name] = val
 
-        if st.button("Predict"):
-            try:
-                input_df = pd.DataFrame([input_data])
+        btn_col, result_col = st.columns([2, 8])
+        with btn_col:
+            predict_clicked = st.button("Predict", use_container_width=True)
+        with result_col:
+            if predict_clicked:
+                try:
+                    input_df = pd.DataFrame([input_data])
 
-                # Apply feature scaling
-                if scaler_X is not None and len(scaled_cols) > 0:
-                    cols_to_scale = [c for c in scaled_cols if c in input_df.columns]
-                    if len(cols_to_scale) > 0:
-                        input_df[cols_to_scale] = scaler_X.transform(input_df[cols_to_scale])
+                    # Apply feature scaling (unchanged)
+                    if features_scaler is not None and len(scaled_cols) > 0:
+                        cols_to_scale = [c for c in scaled_cols if c in input_df.columns]
+                        if len(cols_to_scale) > 0:
+                            input_df[cols_to_scale] = features_scaler.transform(input_df[cols_to_scale])
 
-                pred = model.predict(input_df)
+                    pred = model.predict(input_df)
 
-                # Inverse target scaling
-                if task == "regression" and target_scaled and scaler_y is not None:
-                    pred = scaler_y.inverse_transform(pred.reshape(-1, 1)).flatten()
+                    # Inverse target scaling (unchanged)
+                    if task == "regression" and target_scaled and target_scaler is not None:
+                        pred = target_scaler.inverse_transform(pred.reshape(-1, 1)).flatten()
 
-                st.success(f"Prediction: {pred[0]:.4f}")
+                    # 👇 Success message shows HERE (same line)
+                    st.markdown(f"# `{pred[0]:.4f}`")
 
-            except Exception as e:
-                st.error(f"❌ Prediction error: {e}")
+                except Exception as e:
+                    # 👇 Error message shows HERE (same line)
+                    st.error(f"❌ Prediction error: {e}")
 
 if __name__ == "__main__":
     render()
