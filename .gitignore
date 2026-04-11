@@ -58,12 +58,13 @@ output/
 # SECRETS & SENSITIVE FILES (NEVER COMMIT THESE!)
 # ==============================================
 # API keys, credentials, private data
-secrets.toml
+.streamlit/secrets.toml
+.streamlit/config.toml
 .env
 .env.*
 !.env.example
-config.json
 credentials.json
+src/auth/firebase-service-account.json
 
 # ==============================================
 # DATA FILES (OPTIONAL: ignore large data files)

@@ -171,7 +171,7 @@ def render():
     # =====================================================
     # 🧠 TASK TYPE
     # =====================================================
-    task_choice, model_choice, test_size_choice, train_btn = st.columns([1, 3, 4, 2])
+    task_choice, model_choice, test_size_choice, train_btn = st.columns([2, 3, 3, 2])
     with task_choice:
         task = st.radio("Task type", ["classification", "regression"])
 

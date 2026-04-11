@@ -6,3 +6,5 @@ scikit-learn==1.7.2
 streamlit==1.52.2
 seaborn==0.13.2
 graphviz==0.21
+firebase-admin==7.4.0
+google-cloud-firestore==2.26.0
