@@ -211,8 +211,8 @@ def NN_builder(task:str):
             task=task
         )
         st.pyplot(fig, use_container_width=True)
-
-        st.session_state["model"] = AIM.build_nn_model(task, hidden_layer_sizes, early_stopping, max_iters)
+		with st.button("Update architecture")
+        		st.session_state["model"] = AIM.build_nn_model(task, hidden_layer_sizes, early_stopping, max_iters)
 
 
 # =========================================================
