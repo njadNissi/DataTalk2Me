@@ -4,44 +4,49 @@ sys.path.append(str(Path(__file__).parent))
 
 import pickle
 import streamlit as st
-from src.pages import upload, visualize_2d, visualize_3d, inference, scaling, feature_eng_analysis
-from src.core.auth import init_auth, login_form, show_user_info, logout, check_auto_login
+from src.pages import (
+    upload, visualize_2d, visualize_3d, 
+    inference, proprocessing, feature_eng_analysis,
+    login, usage_review
+)
+
 
 # --------------------------
 # AUTH FIRST
 # --------------------------
-st.set_page_config(layout="wide", page_title="Data Analysis Suite")
-init_auth()
-check_auto_login()
+st.set_page_config(layout="wide", page_title="Let data talk to Me.")
+login.init_auth()
+login.check_auto_login()
 
 if not st.session_state.logged_in:
-    login_form()
+    login.render()
     st.stop()  # STOP APP HERE UNTIL LOGIN
 
 # --------------------------
-# YOUR ORIGINAL APP STARTS HERE (AFTER LOGIN)
+# APP STARTS HERE (AFTER LOGIN)
 # --------------------------
-st.sidebar.title("📊 Data Talk to Me")
+st.sidebar.title("� Data Talk to Me")
 
 # --------------------------
 # SHOW USER INFO + USERNAME IN SIDEBAR
 # --------------------------
-show_user_info()
+login.show_user_info()
 
 # --------------------------
 # ✅ SHOW USER FULL NAME IN SIDEBAR
 # --------------------------
 user = st.session_state.get("user_data", {})
-full_name = user.get("full_name", "User")
-st.sidebar.markdown(f"### 👤 Welcome, **{full_name}**")
+user_name = user.get("user_name", "User")
+st.sidebar.markdown(f"### 👤 Welcome, **{user_name}**")
 
 pages = [
     "Upload Data",
     "Feature Analysis",
     "2D Visualization",
     "3D Visualization",
-    "Scaling",
-    "Inference"
+    "Preprocessing",
+    "Inference",
+    "Usage Review"
 ]
 
 if "page" not in st.session_state:
@@ -80,16 +85,18 @@ elif page == "2D Visualization":
     visualize_2d.render()
 elif page == "3D Visualization":
     visualize_3d.render()
-elif page == "Scaling":
-    scaling.render()
+elif page == "Preprocessing":
+    proprocessing.render()
 elif page == "Inference":
     inference.render()
+elif page == "Usage Review":
+    usage_review.render()
 
 # --------------------------
 # ✅ LOGOUT BUTTON
 # --------------------------
 st.sidebar.markdown("---")
-logout()
+login.logout()
 
 st.sidebar.markdown("---")
 st.sidebar.markdown('<span style="font-size: 11px;">Author:\nJoao Andre Ndombasi *Diakusala*</span>', unsafe_allow_html=True)

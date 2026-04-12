@@ -26,6 +26,7 @@ def init_state():
 # =========================================================
 def update_data(df):
     st.session_state["data"] = df.copy()
+    st.session_state["data_size"] = len(df)
     st.session_state["data_version"] += 1
     st.session_state["column_version"] += 1
 
