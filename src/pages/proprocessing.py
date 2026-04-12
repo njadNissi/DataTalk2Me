@@ -167,6 +167,9 @@ def render():
                 st.session_state.pop("target_scaler", None)
                 st.session_state["is_target_scaled"] = False
 
+
+            st.session_state["train_btn_clicked"] = False # In case it is true
+            st.session_state["model"] = None # In case it is true
             st.success("✅ Changes applied")
     with reset_col:
         # =====================================================

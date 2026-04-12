@@ -224,6 +224,7 @@ def render():
                                     # show the changes
                                     clean_classes = [str(cls) for cls in le.classes_]
                                     mapping = dict(zip(clean_classes, range(len(le.classes_))))
+                                    st.session_state["class_names_mapping"] = mapping.copy()
                                     st.session_state["history"].append((f"Encoded column '{col_name}' with mapping: {mapping}", df_temp.copy()))
                                     st.caption(f"Encoded '{col_name}' with mapping: {mapping}.")
                                 

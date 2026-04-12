@@ -50,8 +50,9 @@ def plot_clean_cm(y_test, y_pred, class_names=None, cbar=False):
     return fig
 
 
-def generate_svg(model, feature_names, target_col=None):
+def generate_svg(model, feature_names):
     try:
+        target_col = st.session_state["target"]
         target_enc = st.session_state.get(f"{target_col}_encoder", None)
         dot_data = export_graphviz(
             model,
@@ -141,15 +142,13 @@ def NN_builder(task:str):
             "Number of hidden layers",
             min_value=1,
             max_value=20,
-            value=2,
+            value=st.session_state.get("nn_num_hidden_layers", 2),
             step=1
         )
 
         # 2. Dynamic grid: MAX 10 COLUMNS PER ROW → auto wrap
         hidden_layer_sizes = []
-        max_cols_per_row = 10
-
-        # Calculate how many full rows + remaining columns
+        max_cols_per_row = 7
         num_rows = (num_layers + max_cols_per_row - 1) // max_cols_per_row
 
         for row_idx in range(num_rows):
@@ -160,8 +159,6 @@ def NN_builder(task:str):
 
             # Create row
             cols = st.columns(current_cols)
-
-            # Fill inputs
             for i_in_row, global_idx in enumerate(range(start, end)):
                 with cols[i_in_row]:
                     neurons = st.number_input(
@@ -184,10 +181,12 @@ def NN_builder(task:str):
                 value=100,
                 step=5
             )
+            st.session_state["nn_max_iters"] = max_iters
 
         # 4. Early stopping
         with early_stop_col:
             early_stopping = st.checkbox("Enable Early Stopping (Early-stopping models do not allow partial training!)", value=True)
+            st.session_state["nn_early_stopping"] = early_stopping
 
         # --------------------------
         # LIVE NEURAL NETWORK DIAGRAM
@@ -211,8 +210,14 @@ def NN_builder(task:str):
             task=task
         )
         st.pyplot(fig, use_container_width=True)
-		with st.button("Update architecture")
-        		st.session_state["model"] = AIM.build_nn_model(task, hidden_layer_sizes, early_stopping, max_iters)
+        if st.button("💾 Update the model with this architecture --->(⚠️ this will reset the trained model to initial settings)"):
+            st.session_state["model"] = AIM.build_nn_model(task, hidden_layer_sizes, early_stopping, max_iters)
+            # st.session_state["nn_hidden_layer_sizes"] = hidden_layer_sizes
+            st.session_state["nn_num_hidden_layers"] = num_layers
+            time.sleep(.5)
+            success_btn = st.success("✅ New model compiled and loaded...")
+            time.sleep(1)
+            success_btn.empty() 
 
 
 # =========================================================
@@ -243,9 +248,11 @@ def render():
     # 🤖 MODEL (FULL ORIGINAL)
     # =====================================================
     with model_choice:
-        task = st.session_state.get("task", "classification")
+        task = st.session_state.get("task")
+        available_models = AIM.get_available_models(task)
         model_name = st.selectbox(
-            f"Choose a model for {task}:", AIM.get_available_models(task)
+            f"Choose a model for {task}:", available_models,
+            index=available_models.index(st.session_state.get("model_name", available_models[0]))
         )
         st.session_state["model_name"] = model_name
 
@@ -315,11 +322,16 @@ def render():
             train_success.empty()
 
             if st.session_state["model_name"] == "Decision Tree":
-                generate_svg(st.session_state["model"], st.session_state["feature_names"], target_col=st.session_state["target"])
+                generate_svg(st.session_state["model"], st.session_state["feature_names"])
 
             st.session_state["train_btn_clicked"] = False
         except Exception as e:
-            st.error(f"❌ Training failed: {e}")
+            if isinstance(e, KeyError) and "model" in str(e):
+                st.markdown("### ⚠️ Your new model is not yet loaded into memory. Please, Press `Update model...` to do so.")
+            elif "early_stopping=True" in str(e):
+                st.markdown("### ⚠️ Partial model fit does not support Early Stopping. Please, disable `Early Stopping` then Press `Update model...`.")
+            else:
+                st.error(f"❌ Training failed: {e}")
 
     # =============================
     # 📊 EVALUATION
@@ -381,14 +393,33 @@ def render():
                     pred = model.predict(input_df)
 
                     # Inverse target scaling (unchanged)
-                    if task == "regression" and target_scaled and target_scaler is not None:
-                        pred = target_scaler.inverse_transform(pred.reshape(-1, 1)).flatten()
+                    if task == "regression":
+                        if target_scaled and target_scaler is not None:
+                            pred = target_scaler.inverse_transform(pred.reshape(-1, 1)).flatten()
+                        st.markdown(f"### `{pred[0]:.4f}`")
 
-                    # 👇 Success message shows HERE (same line)
-                    st.markdown(f"# `{pred[0]:.4f}`")
+                    elif task == "classification":
+                        st.markdown(f"### Most likely class: `{pred[i]}`")
+                        st.markdown(f"## Classes Probabilities Distibution:")
+
+                        class_name_mapping = st.session_state.get("class_names_mapping", None)
+                        pred_prob = model.predict_proba(input_df)[0]
+                        pred_cols = st.columns(len(pred_prob))
+                        if class_name_mapping is not None:
+                            class_names = list(class_name_mapping.keys())
+                            for i in range(len(pred_prob)):
+                                with pred_cols[i]:
+                                    st.markdown(f"### {class_names[i]}: `{pred_prob[i]}`")
+                        else:
+                            for i in range(len(pred_prob)):
+                                with pred_cols[i]:
+                                    st.markdown(f"### class {i}: `{pred_prob[i]}`")
+                            
 
                 except Exception as e:
-                    # 👇 Error message shows HERE (same line)
+                    if "'NoneType' object has no attribute 'predict'" in str(e):
+                        st.markdown("### ⚠️ Your new model is not yet loaded into memory. Please, Press `Update model...` to do so.")
+
                     st.error(f"❌ Prediction error: {e}")
 
 if __name__ == "__main__":
