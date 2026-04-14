@@ -6,7 +6,7 @@ import pickle
 import streamlit as st
 from src.pages import (
     upload, visualize_2d, visualize_3d, 
-    inference, proprocessing, feature_eng_analysis,
+    inference, preprocessing, feature_eng_analysis,
     login, usage_review
 )
 
@@ -86,7 +86,7 @@ elif page == "2D Visualization":
 elif page == "3D Visualization":
     visualize_3d.render()
 elif page == "Preprocessing":
-    proprocessing.render()
+    preprocessing.render()
 elif page == "Inference":
     inference.render()
 elif page == "Usage Review":

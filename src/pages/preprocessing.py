@@ -2,6 +2,10 @@ import streamlit as st
 import pandas as pd
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.model_selection import train_test_split
+import src.core.utils as utils
+import time
+
+"""Use st.session_state['preprocessing']['key'] to store and retrieve related variables."""
 
 
 def render():
@@ -10,16 +14,24 @@ def render():
     # =====================================================
     # 🔐 STATE INIT
     # =====================================================
-    if "raw_data" not in st.session_state:
-        if "data" in st.session_state:
-            st.session_state["raw_data"] = st.session_state["data"].copy()
-        else:
+    if 'preprocessing' not in st.session_state: # No previously preprocessed data
+        if "data" not in st.session_state:
             st.warning("Upload data first")
-            return
+        else: # there is raw data
+            st.session_state.setdefault('preprocessing', {})['data'] = st.session_state['data'].copy()
+            utils.temp_show("✅ Your data has been loaded for preprocessing...", 'success', dur=0.5)
+            st.rerun()
+            
+    else: # Found previously preprocessed data
+        # =====================================================
+        # 🔄 RESET
+        # =====================================================
+        if st.button("♻️ Discard all preprocessing changes"):
+            st.session_state.pop("preprocessing")
+            utils.temp_show("🔄 Reset successful", dur=0.5)
+            st.rerun()
 
-    raw_df = st.session_state["raw_data"]
-    df = raw_df.copy()
-
+    df = st.session_state['preprocessing'].get("data")
     task_col, target_col = st.columns(2)
     with task_col:
         task = st.radio(
@@ -28,7 +40,7 @@ def render():
             horizontal=True, 
             index=0
         )
-        st.session_state["task"] = task
+        st.session_state["preprocessing"]["task"] = task
     
     # =====================================================
     # 🎯 TARGET
@@ -41,14 +53,14 @@ def render():
             index=df.columns.get_loc(st.session_state.get("target", df.columns[-1]))
             if "target" in st.session_state else len(df.columns) - 1
         )
-        st.session_state["target"] = selected_target
+        st.session_state["preprocessing"]["target"] = selected_target
 
     # =====================================================
     # 📊 NUMERIC FEATURES
     # =====================================================
     numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
     feature_cols = [col for col in numeric_cols if col != selected_target]
-    st.write("Encoded features:", [f for f in feature_cols if f in st.session_state.get(f"{f}_enc", [])])
+    st.write("Encoded features:", [f for f in feature_cols if f in st.session_state["preprocessing"].get(f"{f}_enc", [])])
 
     # =====================================================
     # 🎯 FEATURE SCALING
@@ -68,12 +80,12 @@ def render():
     # =====================================================
     # 🎯 LABEL SCALING (NEW)
     # =====================================================
-    st.subheader("Label Scaling")
+    st.subheader("Label Scaling (for regression models)")
     sl1, sl2 = st.columns(2)
 
     with sl1:
         scale_label = st.checkbox(
-            "Scale label (for regression models)",
+            "Scale labels",
             disabled=task == "classification"
         )
     with sl2:
@@ -96,7 +108,8 @@ def render():
 
     # -------- Train-test split (after encoding but before scaling to avoid data leakage) --------
     test_size = st.slider(
-        f"Test size: {st.session_state.get('test_size_val', 0.2)*100:.0f}% | Train size: {100 - st.session_state.get('test_size_val', 0.2)*100:.0f}%",
+        f"Test size: {st.session_state['preprocessing'].get('test_size_val', 0.2)*100:.0f}% "\
+            f"| Train size: {100 - st.session_state['preprocessing'].get('test_size_val', 0.2)*100:.0f}%",
         0.1, 0.5, 0.2,
         key="test_size_val"
     )
@@ -115,7 +128,7 @@ def render():
         df_processed.loc[X_test.index, selected_cols] = X_test_scaled
 
     # -------- Label scaling --------
-    if scale_label and st.session_state["task"] == "classification":
+    if scale_label and st.session_state['preprocessing']["task"] == "classification":
         target_scaler = StandardScaler() if label_scaler_type == "StandardScaler" else MinMaxScaler()
         y_train_scaled = target_scaler.fit_transform(y_train.values.reshape(-1, 1))
         y_test_scaled = target_scaler.transform(y_test.values.reshape(-1, 1))
@@ -136,55 +149,43 @@ def render():
     # =====================================================
     # 💾 APPLY
     # =====================================================
-    apply_col,_, _, reset_col = st.columns(4)
-    with apply_col:
-        if st.button("💾 Apply Preprocessing"):
+    if st.button("💾 Apply Preprocessing"):
 
-            st.session_state["data"] = df_processed
-            st.session_state["target"] = selected_target
-            st.session_state["feature_names"] = feature_cols
-            st.session_state["test_size"] = test_size
+        st.session_state["preprocessing"]["data"] = df_processed
+        st.session_state["preprocessing"]["data_size"] = len(df_processed)
+        st.session_state["preprocessing"]["test_size"] = test_size
+        st.session_state["preprocessing"]["target"] = selected_target
+        st.session_state["preprocessing"]["target_labels"] = sorted(set(y_train))
+        st.session_state["preprocessing"]["feature_names"] = feature_cols
 
-            # FIX 3: Store SCALED train/test splits (critical for modeling)
-            st.session_state["X_train"] = df_processed.loc[X_train.index, selected_cols] # X_train_scaled if features_scaler_type != "None" else X_train
-            st.session_state["X_test"] = df_processed.loc[X_test.index, selected_cols] # X_test_scaled if features_scaler_type != "None" else X_test
-            st.session_state["y_train"] =  df_processed.loc[y_train.index, selected_target] # y_train_scaled.ravel() if scale_label else y_train
-            st.session_state["y_test"] = df_processed.loc[y_test.index, selected_target] # y_test_scaled.ravel() if scale_label else y_test
+        # FIX 3: Store SCALED train/test splits (critical for modeling)
+        st.session_state["preprocessing"]["X_train"] = df_processed.loc[X_train.index, selected_cols] # X_train_scaled if features_scaler_type != "None" else X_train
+        st.session_state["preprocessing"]["X_test"] = df_processed.loc[X_test.index, selected_cols] # X_test_scaled if features_scaler_type != "None" else X_test
+        st.session_state["preprocessing"]["y_train"] =  df_processed.loc[y_train.index, selected_target] # y_train_scaled.ravel() if scale_label else y_train
+        st.session_state["preprocessing"]["y_test"] = df_processed.loc[y_test.index, selected_target] # y_test_scaled.ravel() if scale_label else y_test
 
-            # ---- Feature scaling info ----
-            if features_scaler is not None:
-                st.session_state["features_scaler"] = features_scaler
-                st.session_state["are_features_scaled"] = selected_cols
-            else:
-                st.session_state.pop("features_scaler", None)
-                st.session_state.pop("are_features_scaled", None)
+        # ---- Feature scaling info ----
+        if features_scaler is not None:
+            st.session_state["preprocessing"]["features_scaler"] = features_scaler
+            st.session_state["preprocessing"]["are_features_scaled"] = selected_cols
+        else:
+            st.session_state["preprocessing"].pop("features_scaler", None)
+            st.session_state["preprocessing"].pop("are_features_scaled", None)
 
-            # ---- Label scaling info ----
-            if scale_label:
-                st.session_state["target_scaler"] = target_scaler
-                st.session_state["is_target_scaled"] = True
-            else:
-                st.session_state.pop("target_scaler", None)
-                st.session_state["is_target_scaled"] = False
+        # ---- Label scaling info ----
+        if scale_label:
+            st.session_state["preprocessing"]["target_scaler"] = target_scaler
+            st.session_state["preprocessing"]["is_target_scaled"] = True
+        else:
+            st.session_state["preprocessing"].pop("target_scaler", None)
+            st.session_state["preprocessing"]["is_target_scaled"] = False
 
 
-            st.session_state["train_btn_clicked"] = False # In case it is true
-            st.session_state["model"] = None # In case it is true
-            st.success("✅ Changes applied")
-    with reset_col:
-        # =====================================================
-        # 🔄 RESET
-        # =====================================================
-        if st.button("♻️ Reset to Original"):
+        if "inference" in st.session_state: # reset if already visited inference.
+            st.session_state['inference']["train_btn_clicked"] = False # In case it is true
+            st.session_state['inference']["model"] = None # In case it is true
 
-            st.session_state["data"] = st.session_state["raw_data"].copy()
-
-            # Clear all pipeline info
-            for key in ["features_scaler", "are_features_scaled", "target_scaler", "is_target_scaled"]:
-                st.session_state.pop(key, None)
-
-            st.success("🔄 Reset successful")
-            st.rerun()
+        utils.temp_show("✅ Changes applied", 'success', 1)
 
         
 if __name__ == "__main__":

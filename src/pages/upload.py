@@ -83,9 +83,11 @@ def render():
             st.caption(f"Rows: {len(df)} | Columns: {len(df.columns)} | Sample dataset")
             sample_df = dsp.get_representative_sample(df, target_col=None, sample_size=150)
             st.dataframe(sample_df, height=600)
+
+            # RESET BUTTON
             if st.button("🗑️ Release file"):
-                
                 init_state()
+                st.session_state["data"] = None
                 st.success("✅ File released")
                 st.rerun()
         else:
@@ -96,11 +98,10 @@ def render():
     # ✏️ EDIT
     # =========================================================
     with tab2:
-        df = st.session_state.get("data")
-
         # -----------------------------
         # CREATE DATASET
         # -----------------------------
+        df = st.session_state.get("data")
         if df is None:
             st.warning("No dataset loaded")
 
@@ -121,11 +122,10 @@ def render():
                 st.error(f"❌ Error: {e}")
 
         else:
+            # -----------------------------
+            # DATA EDITOR
+            # -----------------------------
             st.caption(f"Rows: {len(df)} | Columns: {len(df.columns)}")
-
-            # -----------------------------
-            # DATA EDITOR (FIXED INSTANT REFRESH)
-            # -----------------------------
             editor_key = f"editor_{st.session_state.column_version}_{len(st.session_state.data.columns)}"
             edited_df = st.data_editor(
                 st.session_state["data"],
@@ -139,7 +139,6 @@ def render():
                 update_data(edited_df)
 
             st.markdown("---")
-
             # -----------------------------
             # COLUMN OPERATIONS
             # -----------------------------

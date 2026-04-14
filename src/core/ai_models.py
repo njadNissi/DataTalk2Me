@@ -20,6 +20,7 @@ import numpy as np
 import streamlit as st
 from sklearn.metrics import log_loss, mean_squared_error
 import time
+import io
 
 
 def get_available_models(task):
@@ -166,10 +167,12 @@ def get_model(task, model_name):
 
     return None
 
-def build_nn_model(task, hidden_layer_sizes:list[int], early_stopping=True, max_iter=1000):
+
+def build_nn_model(task, hidden_layer_sizes:list[int], activation_fnc:str, early_stopping=True, max_iter=1000):
     if task == "classification":
         return MLPClassifier(
             hidden_layer_sizes=hidden_layer_sizes,
+            activation=activation_fnc,  # ONLY ONE ACTIVATION ALLOWED
             max_iter=max_iter,
             early_stopping=early_stopping,
             random_state=42
@@ -177,6 +180,7 @@ def build_nn_model(task, hidden_layer_sizes:list[int], early_stopping=True, max_
     elif task == "regression":
         return MLPRegressor(
             hidden_layer_sizes=hidden_layer_sizes,
+            activation=activation_fnc,  # ONLY ONE ACTIVATION ALLOWED
             max_iter=max_iter,
             early_stopping=early_stopping,
             random_state=42
@@ -204,18 +208,21 @@ def get_linear_regression_formula(model, feature_names, target_name):
 # --------------------------
 # AUTO TASK TRAINING + LIVE CONVERGENCE CURVES
 # --------------------------
-def train_model(model, X_train, y_train, X_test, y_test):
-    task = st.session_state.get("task", "regression")
+def train_model(model, X_train, y_train, X_test, y_test, task: str, partial_train:bool, status):
     is_classification = (task == "classification")
 
-    # Get the plot placeholder (OUTSIDE button)
-    plot_placeholder = st.session_state.get("plot_placeholder", st.empty())
+    # Plot placeholder inside status container
+    if status is not None:
+        plot_placeholder = status.empty()
+    else:
+        plot_placeholder = st.session_state.get("plot_placeholder", st.empty())
+
     fig, ax = plt.subplots(1, 2, figsize=(12, 4))
 
     # --------------------------
-    # CASE 1: Model SUPPORTS partial_fit (MLP, SGD...)
+    # CASE 1: Model supports partial_fit (MLP, SGD...)
     # --------------------------
-    if hasattr(model, "partial_fit"):
+    if hasattr(model, "partial_fit") and partial_train:
         train_losses = []
         test_losses = []
         train_scores = []
@@ -226,21 +233,22 @@ def train_model(model, X_train, y_train, X_test, y_test):
 
         epochs = 30
         for epoch in range(epochs):
-            # Train step
+            # Training step
             if is_classification:
                 classes = sorted(set(y_train))
                 model.partial_fit(X_train, y_train, classes=classes)
             else:
                 model.partial_fit(X_train, y_train)
 
-            # Predict
+            # Predictions
             y_pred_train = model.predict(X_train)
             y_pred_test = model.predict(X_test)
 
-            # Score & Loss
+            # Scores
             train_scores.append(model.score(X_train, y_train))
             test_scores.append(model.score(X_test, y_test))
 
+            # Losses
             if is_classification and hasattr(model, "predict_proba"):
                 train_losses.append(log_loss(y_train, model.predict_proba(X_train)))
                 test_losses.append(log_loss(y_test, model.predict_proba(X_test)))
@@ -248,7 +256,7 @@ def train_model(model, X_train, y_train, X_test, y_test):
                 train_losses.append(mean_squared_error(y_train, y_pred_train))
                 test_losses.append(mean_squared_error(y_test, y_pred_test))
 
-            # Update live plot
+            # Update plot
             ax[0].clear()
             ax[0].plot(train_scores, label="Train Score")
             ax[0].plot(test_scores, label="Test Score")
@@ -266,17 +274,14 @@ def train_model(model, X_train, y_train, X_test, y_test):
             plot_placeholder.pyplot(fig)
 
     # --------------------------
-    # CASE 2: Model NO partial_fit (LinearRegression, RF, etc.)
+    # CASE 2: Standard models (no partial_fit)
     # --------------------------
     else:
-        # Train normally
         model.fit(X_train, y_train)
 
-        # Predict once
         y_pred_train = model.predict(X_train)
         y_pred_test = model.predict(X_test)
 
-        # Single point for plot
         score_train = model.score(X_train, y_train)
         score_test = model.score(X_test, y_test)
 
@@ -287,7 +292,7 @@ def train_model(model, X_train, y_train, X_test, y_test):
             loss_train = mean_squared_error(y_train, y_pred_train)
             loss_test = mean_squared_error(y_test, y_pred_test)
 
-        # Display simple result plot
+        # Simple static plot
         ax[0].bar(["Train", "Test"], [score_train, score_test], color=["#2E8B57", "#FF6347"])
         ax[0].set_title(f"Score: {score_test:.3f} (Test)")
         ax[0].grid(True)
@@ -298,18 +303,20 @@ def train_model(model, X_train, y_train, X_test, y_test):
 
         plot_placeholder.pyplot(fig)
 
-    # Final fit (safe for all models)
-    model.fit(X_train, y_train)
+    # Save final figure to session state
+    st.session_state['inference']['conv_curves'] = fig
+
+    return model
 
 
-def draw_nn_architecture(input_size, hidden_layers, output_size=1, task="regression"):
+def draw_nn_architecture(input_size, hidden_layers, activation_fncs, output_size=1):
     plt.rcParams.update({'font.size': 10})
-    fig, ax = plt.subplots(figsize=(7, 4.5))  # Clean balanced size
+    fig, ax = plt.subplots(figsize=(7, 4.5))
     ax.axis('off')
 
     # Get feature names from session state
-    feature_names = st.session_state.get("feature_names", [f"Feature {i+1}" for i in range(input_size)])
-    # Limit to actual input size (in case list is longer)
+    task = st.session_state['preprocessing']["task"]
+    feature_names = st.session_state['preprocessing'].get("feature_names", [f"Feature {i+1}" for i in range(input_size)])
     feature_names = feature_names[:input_size]
 
     # Colors
@@ -317,7 +324,7 @@ def draw_nn_architecture(input_size, hidden_layers, output_size=1, task="regress
     color_hidden = "#34A853"
     color_output = "#FBBC05" if task == "classification" else "#EA4335"
 
-    # Layers structure
+    # 👇 Use visual output neurons for drawing ONLY
     layers = [input_size] + hidden_layers + [output_size]
     max_neurons = max(layers)
     v_spacing = 1.1
@@ -329,7 +336,6 @@ def draw_nn_architecture(input_size, hidden_layers, output_size=1, task="regress
 
         for n in range(neuron_count):
             y = start_y + n * v_spacing
-            # Draw neuron circle
             circle = plt.Circle(
                 (x, y), 0.35,
                 color=color_input if layer_idx == 0
@@ -339,18 +345,14 @@ def draw_nn_architecture(input_size, hidden_layers, output_size=1, task="regress
             )
             ax.add_patch(circle)
 
-            # Neuron label (only first neuron shows layer size)
             if n == 0:
                 ax.text(x, y, str(neuron_count), ha='center', va='center',
                         fontsize=9, color='white', fontweight='bold')
 
-        # --------------------------
-        # 👉 SHOW FEATURE NAMES ON INPUT LAYER
-        # --------------------------
+        # Show feature names
         if layer_idx == 0:
             for n, fname in enumerate(feature_names):
                 y = start_y + n * v_spacing
-                # Shorten long names for display
                 fname_short = fname[:10] + "..." if len(fname) > 10 else fname
                 ax.text(x - 1.0, y, fname_short, ha='right', va='center', fontsize=8, color='#222')
 
@@ -367,7 +369,31 @@ def draw_nn_architecture(input_size, hidden_layers, output_size=1, task="regress
                     ax.plot([x + 0.35, next_x - 0.35], [y1, y2],
                             'gray', linewidth=0.2, alpha=0.3)
 
-    # Remove extra margins
+    # ==========================================================================
+    # 🌟 ACTIVATION TEXT: FULLY AUTO-SCALED (width + height)
+    # ==========================================================================
+    if activation_fncs and len(hidden_layers) > 1:
+        # Smart scaling based on plot dimensions
+        total_layers = 2 + len(hidden_layers)
+        dynamic_font = max(5, 13 - (total_layers * 0.6))
+
+        mid_input_y = -(input_size - 1) * v_spacing / 2 + ((input_size - 1) / 2) * v_spacing
+
+        for act_idx in range(len(activation_fncs)):
+            x_pos = (1.5 + act_idx) * h_spacing
+            act = activation_fncs[act_idx]
+            pretty_act = {"logistic": "sigmoid", "relu": "ReLU", "tanh": "Tanh", "identity": "linear"}.get(act, act)
+
+            ax.text(
+                x_pos, mid_input_y,
+                pretty_act,
+                ha='center', va='center',
+                fontsize=dynamic_font,
+                fontweight='bold',
+                color='white',
+                bbox=dict(boxstyle='round,pad=0.25', facecolor='#444', alpha=0.8)
+            )
+
     ax.set_xlim(-2.5, (len(layers)) * h_spacing + 0.5)
     ax.set_ylim(-max_neurons * v_spacing * 0.55, max_neurons * v_spacing * 0.55)
     ax.set_aspect('equal')
@@ -375,6 +401,18 @@ def draw_nn_architecture(input_size, hidden_layers, output_size=1, task="regress
     plt.tight_layout(pad=0.2)
     plt.subplots_adjust(top=0.95, bottom=0.05)
 
-    return fig
+    download_btn, update_btn = st.columns(2)
+    # 📥 DOWNLOAD BUTTON (SVG format)
+    buf = io.BytesIO()
+    fig.savefig(buf, format="svg", bbox_inches="tight")
+    buf.seek(0)
+    with download_btn:
+        st.download_button(
+            label="📥 Download HQ image of your NeuralNet (SVG)",
+            data=buf,
+            file_name="convergence_curve.svg",
+            mime="image/svg+xml"
+        )
+    st.session_state['inference']['nn_update_btn_placeholder'] = update_btn
 
-    
+    return fig
