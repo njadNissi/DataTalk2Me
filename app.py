@@ -5,7 +5,7 @@ sys.path.append(str(Path(__file__).parent))
 import pickle
 import streamlit as st
 from src.pages import (
-    upload, visualize_2d, visualize_3d, 
+    upload, data_plotting,
     inference, preprocessing, feature_eng_analysis,
     login, usage_review
 )
@@ -42,8 +42,7 @@ st.sidebar.markdown(f"### 👤 Welcome, **{user_name}**")
 pages = [
     "Upload Data",
     "Feature Analysis",
-    "2D Visualization",
-    "3D Visualization",
+    "Data Plotting",
     "Preprocessing",
     "Inference",
     "Usage Review"
@@ -81,10 +80,8 @@ if page == "Upload Data":
     upload.render()
 elif page == "Feature Analysis":
     feature_eng_analysis.render()
-elif page == "2D Visualization":
-    visualize_2d.render()
-elif page == "3D Visualization":
-    visualize_3d.render()
+elif page == "Data Plotting":
+    data_plotting.render()
 elif page == "Preprocessing":
     preprocessing.render()
 elif page == "Inference":

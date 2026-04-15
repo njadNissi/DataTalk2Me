@@ -11,8 +11,7 @@ from sklearn.tree import plot_tree, export_graphviz
 import matplotlib.pyplot as plt
 import seaborn as sns
 import graphviz
-import src.core.ai_models as AIM
-import src.core.utils as utils
+from src.core import ai_models as AIM, utils
 
 
 def plot_clean_cm(y_test, y_pred, class_names=None, cbar=False):
@@ -429,7 +428,7 @@ def render():
 
         except Exception as e:
             st.session_state['inference']['training_completed'] = False
-            if isinstance(e, KeyError) and "model" in str(e):
+            if isinstance(e, KeyError) and "model" in str(e) or "object has no attribute 'fit'" in str(e):
                 st.markdown("### ⚠️ Your new model is not yet loaded into memory. Please press `Update model...`")
             elif "early_stopping=True" in str(e):
                 st.markdown("### ⚠️ Partial model fit does not support Early Stopping. Please disable it and update the model.")

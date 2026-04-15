@@ -28,7 +28,7 @@ def render():
         # =====================================================
         if st.button("♻️ Discard all preprocessing changes"):
             st.session_state.pop("preprocessing")
-            utils.temp_show("🔄 Reset successful", dur=0.5)
+            utils.temp_show("🔄 Reset successful ✅", 'success', dur=0.5)
             st.rerun()
 
     df = st.session_state['preprocessing'].get("data")
@@ -40,7 +40,7 @@ def render():
             horizontal=True, 
             index=0
         )
-        st.session_state["preprocessing"]["task"] = task
+        # st.session_state["preprocessing"]["task"] = task
     
     # =====================================================
     # 🎯 TARGET
@@ -53,7 +53,7 @@ def render():
             index=df.columns.get_loc(st.session_state.get("target", df.columns[-1]))
             if "target" in st.session_state else len(df.columns) - 1
         )
-        st.session_state["preprocessing"]["target"] = selected_target
+        # st.session_state["preprocessing"]["target"] = selected_target
 
     # =====================================================
     # 📊 NUMERIC FEATURES
@@ -150,6 +150,9 @@ def render():
     # 💾 APPLY
     # =====================================================
     if st.button("💾 Apply Preprocessing"):
+
+        st.session_state["preprocessing"]["task"] = task
+        st.session_state["preprocessing"]["target"] = selected_target
 
         st.session_state["preprocessing"]["data"] = df_processed
         st.session_state["preprocessing"]["data_size"] = len(df_processed)

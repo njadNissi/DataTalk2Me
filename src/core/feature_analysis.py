@@ -17,7 +17,7 @@ from sklearn.preprocessing import LabelEncoder
 def encode_labels(catergorical_col):
     le = LabelEncoder()
     encoded_col = le.fit_transform(catergorical_col)
-    return encoded_col, le
+    return encoded_col.astype(np.int64), le
 
 
 # Set plot style and font

@@ -2,8 +2,8 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import os
-from src.core import feature_analysis as fan
-import src.core.dataset_processing as dsp
+from src.core import feature_analysis as fan, dataset_processing as dsp, utils as utils
+import ast
 
 # =========================================================
 # 🔐 STATE INITIALIZATION
@@ -21,6 +21,30 @@ def init_state():
     if "column_version" not in st.session_state:
         st.session_state["column_version"] = 0
 
+
+def retouch_history(keep_last: int = 2):
+    """
+        Replace old history DataFrames with their .head() to save memory
+        Keep only the last 'keep_last' entries as full DataFrames
+    """
+    if "history" not in st.session_state:
+        return
+
+    full_history = st.session_state["history"]
+    new_history = []
+
+    # Iterate all history items
+    for i, (label, df) in enumerate(full_history):
+        # Keep recent entries FULL
+        if i >= len(full_history) - keep_last:
+            new_history.append((label, df.copy()))
+        # Replace old entries with .head()
+        else:
+            new_history.append((label, df.head().copy()))
+
+    # Replace history
+    st.session_state["history"] = new_history
+    
 # =========================================================
 # 🔄 CENTRAL UPDATE FUNCTION
 # =========================================================
@@ -30,6 +54,9 @@ def update_data(df):
     st.session_state["data_version"] += 1
     st.session_state["column_version"] += 1
 
+    retouch_history()
+    
+    
 # =========================================================
 # 🎯 MAIN APP
 # =========================================================
@@ -62,8 +89,8 @@ def render():
                     if st.button(f"📄 {file}"):
                         file_path = os.path.join("data", file)
                         df = pd.read_csv(file_path)
-                        st.session_state["history"] = [("Example Dataset: " + file, df.copy())]
                         update_data(df)
+                        st.session_state["history"] = [("Loaded Example Dataset: " + file, df.copy())]
                         st.rerun()  # refresh to show data
         else:
             st.info("No CSV files found in the /data folder.")
@@ -76,8 +103,8 @@ def render():
         if uploaded_file:
             df = pd.read_csv(uploaded_file)
             st.session_state["uploaded_file_name"] = uploaded_file.name
-            st.session_state["history"] = [("Uploaded File", df.copy())]
             update_data(df)
+            st.session_state["history"] = [("Uploaded File", df.copy())]
 
         if df is not None:
             st.caption(f"Rows: {len(df)} | Columns: {len(df.columns)} | Sample dataset")
@@ -115,8 +142,8 @@ def render():
                         "y": ["0"]*n_rows
                     })
 
-                    st.session_state["history"] = [("Created Dataset", df.copy())]
                     update_data(df)
+                    st.session_state["history"] = [("Created Dataset", df.copy())]
                     st.rerun()
             except Exception as e:
                 st.error(f"❌ Error: {e}")
@@ -138,6 +165,41 @@ def render():
                 st.session_state["history"].append(("Edited Data", st.session_state["data"].copy()))
                 update_data(edited_df)
 
+            # Get non-numeric columns
+            categorical_cols = st.session_state["data"].select_dtypes(exclude=['number']).columns.tolist()
+            if categorical_cols:
+                st.markdown("---")
+                st.subheader("🔡 Encode Categorical Columns to Numbers")
+
+                c1, c2, c3, c4 = st.columns([2, 4, 2, 2])
+                with c1:
+                    select_all = st.checkbox("Select All Categorical Columns")
+                    if select_all:
+                        selected_cols = categorical_cols  # auto-select all
+                    else:
+                        with c2:
+                            selected_cols = st.multiselect(
+                                "Select column(s) to encode",
+                                categorical_cols
+                            )
+                with c3:
+                    if st.button("Encode Column to Numerical Values"):
+                        temp_df = st.session_state["data"].copy()
+
+                        # Encode every selected column
+                        for col_name in selected_cols:
+                            encoded_col, le = fan.encode_labels(temp_df[col_name].astype(str))
+                            temp_df[col_name] = encoded_col
+                            st.session_state[f"{col_name}_encoder"] = le  # Store encoder for potential inverse transform
+
+                        # Save history + update data
+                        encoded_names = ", ".join(selected_cols)
+                        update_data(temp_df)
+                        st.session_state["history"].append((f"Encoded: {encoded_names}", st.session_state["data"].copy()))
+                        with c4:
+                            utils.temp_show(f"✅ Successfully encoded: **{encoded_names}**", 'success', 1)
+
+                        st.rerun()
             st.markdown("---")
             # -----------------------------
             # COLUMN OPERATIONS
@@ -175,19 +237,23 @@ def render():
             st.subheader("⚡ Python Column Generator")
 
             pycol1, pycol2 = st.columns([9, 1])
-            user_code = None
             st.info("Available columns: " + ", ".join(df.columns))
             with pycol1:
-                user_code = st.text_area("Examples (can use multiline code | use prefix 'col_' in column name to create new columns): n = len(x0) ........|.......... col_x0 = np.arange(-5,5) .........|.......... col_x1 = np.random.randint(-10,15) ...........|........... col_x2 = x0 - x1**2 ",
-                                        height=120)
+                previous_code = st.session_state.get("python_script", "")
+                user_code = st.text_area("Python 3.x interpreter",
+                    height=120, 
+                    help="[1] Can use multiline code\n[2] Use prefix 'col_' in column name to create new columns):\n\tn = len(x0)\n\tcol_x0 = np.arange(-5,5)\n\tcol_x1 = np.random.randint(-10,15)\n\tcol_x2 = x0 - x1**2"
+                )
 
             with pycol2:
                 if st.button("▶️ Run Code"):
                     try:
+                        # Validate syntax safely
+                        tree = ast.parse(user_code)
+                        utils.temp_show("✅ Valid Python syntax", 'success', .5)
+                        
                         df_temp = df.copy()
-
                         local_env = {col: df_temp[col].values for col in df_temp.columns}
-
                         global_env = {
                             "__builtins__": {},
                             "np": np,
@@ -227,17 +293,20 @@ def render():
                                     st.session_state["history"].append((f"Encoded column '{col_name}' with mapping: {mapping}", df_temp.copy()))
                                     st.caption(f"Encoded '{col_name}' with mapping: {mapping}.")
                                 
-                                df_temp[col_name] = arr.astype(np.int64)
+                                df_temp[col_name] = arr
 
                             # 🔴 FIX 2: Length match check
                             if len(value) != len(df_temp):
                                 st.warning(f"⚠️ '{col_name}' length mismatch — skipped")
                                 continue
 
-                        st.session_state["history"].append((f"Generated columns [{', '.join(key[4:] for key in local_env if key.startswith('col_'))}] via code", df.copy()))
                         update_data(df_temp)
+                        st.session_state["history"].append((f"Generated columns [{', '.join(key[4:] for key in local_env if key.startswith('col_'))}] via code", df.copy()))
+                        st.session_state['python_script'] = user_code
                         st.rerun()
 
+                    except SyntaxError as e:
+                        st.error(f"❌ Syntax error: {e}")
                     except Exception as e:
                         st.error(f"❌ Error: {e}")
 
@@ -301,7 +370,10 @@ def render():
     # =========================================================
     with tab4:
         for i, (change, df_state) in enumerate(st.session_state["history"][::-1]):
-            st.write(f"{i+1}. {change}")
+            with st.expander(f"{i+1}. {change}", expanded=False):
+                # Show dataframe head inside
+                # st.caption("Preview (head)")
+                st.dataframe(df_state.head(), use_container_width=True)
 
 if __name__ == "__main__":
     render()
