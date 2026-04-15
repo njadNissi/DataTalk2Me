@@ -8,8 +8,8 @@ from sklearn.feature_selection import (
 )
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import StratifiedKFold, cross_val_score
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.model_selection import StratifiedKFold, KFold, cross_val_score
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import LabelEncoder
 

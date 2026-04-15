@@ -42,12 +42,16 @@ def render():
     # --------------------------
     # 2D Visualization Section (Collapsible)
     # --------------------------
-    with st.expander("2D Visualization", expanded=True):
-        if selected_data != 'my function':
+    if selected_data != 'my function':
+        with st.expander("2D Visualization", expanded=True):
             cols = df.columns.tolist()
-            x = st.selectbox("X-axis", cols, key="2d_x")
-            y = st.selectbox("Y-axis", cols, key="2d_y")
-            plot_type = st.selectbox("Plot Type", ["Scatter", "Line", "Histogram"], key="2d_type")
+            x_col, y_col, scatter_col = st.columns(3)
+            with x_col:
+                x = st.selectbox("X-axis", cols, key="2d_x")
+            with y_col:
+                y = st.selectbox("Y-axis", cols, key="2d_y")
+            with scatter_col:
+                plot_type = st.selectbox("Plot Type", ["Scatter", "Line", "Histogram"], key="2d_type")
 
             # Generate 2D Plot
             if plot_type == "Scatter":
@@ -59,8 +63,6 @@ def render():
                 fig = px.histogram(df, x=x, title=f"Histogram: {x}")
             
             st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("2D visualization is not available for custom function mode (3D only)")
 
     # --------------------------
     # 3D Visualization Section (Collapsible)
@@ -69,12 +71,37 @@ def render():
         if selected_data != 'my function':
             # 3D Plot from Dataset
             cols = df.columns.tolist()
-            x_3d = st.selectbox("X", cols, key="3d_x")
-            y_3d = st.selectbox("Y", cols, key="3d_y")
-            z_3d = st.selectbox("Z", cols, key="3d_z")
+            x_3d_col, y_3d_col, z_col_1, z_col_2 = st.columns(4)
+            
+            with x_3d_col:
+                x_3d = st.selectbox("X", cols, key="3d_x")
+            with y_3d_col:
+                y_3d = st.selectbox("Y", cols, key="3d_y")
+            # --------------------------
+            # Choose Z: Column OR Fixed Number
+            # --------------------------
+            with z_col_1:
+                use_const_z = st.checkbox("Set Z coordinate", value=len(cols) < 3)
+            with z_col_2:
+                if use_const_z:
+                        z_value = st.number_input("Constant Z value", value=0.0, step=0.1, key="const_z")
+                        z_3d = np.full(len(df), z_value)
+                        z_label = f"Z = {z_value}"
+                else:
+                    # Original: select column
+                    z_3d = st.selectbox("Z Column", cols, key="3d_z")
+                    z_label = z_3d
 
-            fig_3d = px.scatter_3d(df, x=x_3d, y=y_3d, z=z_3d, 
-                                   title=f"3D Scatter: {x_3d}, {y_3d}, {z_3d}")
+            # --------------------------
+            # Plot (works for 2 OR 3 columns)
+            # --------------------------
+            fig_3d = px.scatter_3d(
+                df, 
+                x=x_3d, 
+                y=y_3d, 
+                z=z_3d, 
+                title=f"3D Scatter: {x_3d}, {y_3d}, {z_label}"
+            )
             fig_3d.update_traces(marker=dict(size=3))
             st.plotly_chart(fig_3d, use_container_width=True)
         

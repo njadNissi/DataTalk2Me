@@ -88,6 +88,7 @@ def evaluate_model():
     y_pred = st.session_state['inference']["y_pred"]
     task = st.session_state['preprocessing']['task']
     target = st.session_state['preprocessing']['target']
+    run_evaluate = st.session_state['inference'].get('evaluate_btn_clicked', False)
 
     # Add this: Initialize session state for evaluation data
     if "evaluation_data" not in st.session_state:
@@ -424,7 +425,8 @@ def render():
                 generate_svg_decision_tree()
 
             # Reset train flag
-            st.session_state['inference']["train_btn_clicked"] = False
+            st.session_state['inference']["train_btn_clicked"] = True
+            st.session_state['inference']["eval_btn_clicked"] = False
 
         except Exception as e:
             st.session_state['inference']['training_completed'] = False

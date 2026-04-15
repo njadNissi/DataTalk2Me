@@ -23,13 +23,18 @@ def render():
             st.rerun()
             
     else: # Found previously preprocessed data
+        apply_col, reset_col = st.columns(2)
+        with apply_col:
+            if st.button("💾 Apply & Save all Preprocessing changes"):
+                st.session_state['preprocessing']['APPLY_PREPROCESSING'] = True
         # =====================================================
         # 🔄 RESET
         # =====================================================
-        if st.button("♻️ Discard all preprocessing changes"):
-            st.session_state.pop("preprocessing")
-            utils.temp_show("🔄 Reset successful ✅", 'success', dur=0.5)
-            st.rerun()
+        with reset_col:
+            if st.button("♻️ Discard all preprocessing changes"):
+                st.session_state.pop("preprocessing")
+                utils.temp_show("🔄 Reset successful ✅", 'success', dur=0.5)
+                st.rerun()
 
     df = st.session_state['preprocessing'].get("data")
     task_col, target_col = st.columns(2)
@@ -65,27 +70,26 @@ def render():
     # =====================================================
     # 🎯 FEATURE SCALING
     # =====================================================
-    st.subheader("Feature Scaling")
-
-    selected_cols = st.multiselect(
-        "Select features to SCALE",
-        feature_cols,
-        default=feature_cols
-    )
-    features_scaler_type = st.selectbox(
-        "Feature Scaler",
-        ["None", "StandardScaler", "MinMaxScaler"]
-    )
+    feat_sc1, feat_sc2 = st.columns([9, 1])
+    with feat_sc1:
+        selected_cols = st.multiselect(
+            "Select features to SCALE",
+            feature_cols,
+            default=feature_cols
+        )
+    with feat_sc2:
+        features_scaler_type = st.selectbox(
+            "Feature Scaler",
+            ["None", "StandardScaler", "MinMaxScaler"]
+        )
 
     # =====================================================
     # 🎯 LABEL SCALING (NEW)
     # =====================================================
-    st.subheader("Label Scaling (for regression models)")
     sl1, sl2 = st.columns(2)
-
     with sl1:
         scale_label = st.checkbox(
-            "Scale labels",
+            "Scale labels (for regression models)",
             disabled=task == "classification"
         )
     with sl2:
@@ -141,15 +145,17 @@ def render():
     # =====================================================
     # 📊 PREVIEW
     # =====================================================
-    st.write("Preprocessed Data Preview")
-    st.dataframe(df_processed.head())
-    st.write("Preprocessed Data Description")
-    st.dataframe(df_processed.describe())
+    with st.expander("Preprocessed Data ovevrview", expanded=False):
+        st.caption("Your full preprocessed data, ready for download 📥")
+        st.dataframe(df_processed)
+        st.caption("Preprocessed Data Description, ready for download 📥")
+        st.dataframe(df_processed.describe())
 
     # =====================================================
     # 💾 APPLY
     # =====================================================
-    if st.button("💾 Apply Preprocessing"):
+    if st.session_state['preprocessing'].get('APPLY_PREPROCESSING', False):
+        st.session_state['preprocessing']['APPLY_PREPROCESSING'] = False
 
         st.session_state["preprocessing"]["task"] = task
         st.session_state["preprocessing"]["target"] = selected_target

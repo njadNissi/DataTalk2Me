@@ -203,7 +203,7 @@ def get_linear_regression_formula(model, feature_names, target_name):
         else:
             parts.append(f"- {abs(coef):.4f} × `{feat}`")
 
-    return f"### {target_name} = {' '.join(parts)}"
+    return f"{target_name} = {' '.join(parts)}"
 
 # --------------------------
 # AUTO TASK TRAINING + LIVE CONVERGENCE CURVES
