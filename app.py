@@ -1,20 +1,36 @@
 import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent))
-
 import pickle
 import streamlit as st
+st.set_page_config(page_title="Talk2Me", layout="wide")
 from src.pages import (
-    upload, data_plotting,
-    inference, preprocessing, feature_eng_analysis,
-    login, usage_review
+    upload, data_plotting, inference, login,
+    preprocessing, feature_eng_analysis,usage_review
 )
-
+import sys
 
 # --------------------------
 # AUTH FIRST
 # --------------------------
 st.set_page_config(layout="wide", page_title="Let data talk to Me.")
+
+# 🔥 DEV MODE AUTO-DETECTION
+DEV_MODE = "--dev" in sys.argv # RUN as: reamlit run app.py -- --dev (-- → tells Streamlit: “all args after this are for MY app, not for Streamlit”)
+
+# DEV USER (auto-login)
+if DEV_MODE:
+    st.session_state.logged_in = True
+    st.session_state.user_data = {
+        "user_name": "dev_user",
+        "email": "dev@test.com",
+        "use_times": 999,
+        "first_use": "2025-01-01",
+        "last_use": "2025-01-01",
+        "usage_purpose": ["Development"]
+    }
+# ===============================================================================
+
 login.init_auth()
 login.check_auto_login()
 
@@ -31,13 +47,6 @@ st.sidebar.title("� Data Talk to Me")
 # SHOW USER INFO + USERNAME IN SIDEBAR
 # --------------------------
 login.show_user_info()
-
-# --------------------------
-# ✅ SHOW USER FULL NAME IN SIDEBAR
-# --------------------------
-user = st.session_state.get("user_data", {})
-user_name = user.get("user_name", "User")
-st.sidebar.markdown(f"### 👤 Welcome, **{user_name}**")
 
 pages = [
     "Upload Data",

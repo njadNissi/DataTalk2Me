@@ -170,7 +170,7 @@ def render():
                         "weighted_f1": "F1 Score"
                     })
 
-                    st.dataframe(display_df, use_container_width=True)
+                    st.dataframe(display_df, width='stretch')
 
                     # --- Best method ---
                     best_idx = eval_df["cv_score_mean"].idxmax()
@@ -273,7 +273,7 @@ def render():
                     "weighted_f1": "F1 Score"
                 })
 
-                st.dataframe(display_df, use_container_width=True)
+                st.dataframe(display_df, width='stretch')
 
             
 if __name__ == "__main__":

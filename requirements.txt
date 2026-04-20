@@ -1,10 +1,32 @@
-matplotlib==3.10.8
+# Core
+streamlit==1.52.2
 numpy==2.1.2
 pandas==2.3.3
+pillow>=10.0.0
+requests>=2.32.0
+
+# Visualization
+matplotlib==3.10.8
 plotly==5.22.0
-scikit-learn==1.7.2
-streamlit==1.52.2
 seaborn==0.13.2
 graphviz==0.21
+
+# ML / Image AI
+scikit-learn==1.7.2
+torch>=2.0.0
+torchvision>=0.15.0
+onnxruntime>=1.17.0
+opencv-python-headless>=4.8.0
+imageio>=2.34.0
+scikit-image>=0.24.0
+
+# Background Removal
+rembg==2.0.50
+pymatting>=1.1.0
+
+# Image Cropper (WORKING ONE)
+streamlit-cropper>=0.2.1
+
+# Firebase
 firebase-admin==7.4.0
 google-cloud-firestore==2.26.0

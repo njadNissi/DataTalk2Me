@@ -20,40 +20,57 @@ def check_auto_login():
         st.session_state.logged_in = True
 
 # ------------------------------
-# LOGIN FORM (100% FIXED)
+# LOGIN FORM
 # ------------------------------
 def render():
-    total = get_total_users() + 777
-
+    # 🔥 SKIP LOGIN IN DEV MODE
+    if st.session_state.logged_in:
+        st.success("✅ Auto-logged in")
+        return
+    
     st.title("🔐 Let data talk to Me. - Login")
     st.markdown(f"""
         <div style="text-align:center; font-size:18px; margin:15px 0;">
-        Welcome to join <span style="color:#1f77b4; font-size:28px; font-weight:bold;">{total}👥</span> data mates around the world 🌍
+        Welcome to join <span style="color:#1f77b4; font-size:28px; font-weight:bold;">👥</span> data mates around the world 🌍
     </div>
     """, unsafe_allow_html=True)
 
-    # --------------------------
-    # STEP 1: USER + EMAIL
-    # --------------------------
-    # user_name = st.text_input("Username")
     email = st.text_input(
         "Email Address",
         autocomplete="email"
     )
+
     if st.button("Continue", type="primary"):
-        if  not is_email_real(email):
+        if not is_email_real(email):
             st.warning("Please fill valid email.")
         else:
+            # --------------------------
+            # SEXY DANCING CAT LOADER
+            # --------------------------
+            loader = st.empty()
+            with loader:
+                st.markdown("""
+                    <div style="text-align:center; padding: 30px 0;">
+                        <h3 style="color:#666;">🔐 Logging you in...</h3>
+                        <img src="https://i.giphy.com/media/3o7qE1YN7aBOFPRw8E/giphy.gif" 
+                             width="200" style="border-radius: 14px;">
+                        <p style="font-size:17px; color:#ff4b4b; margin-top:10px;">
+                           ✨ Just a moment ✨
+                        </p>
+                    </div>
+                """, unsafe_allow_html=True)
+
+            # --------------------------
+            # LOGIN (ALREADY SETS user_data)
+            # --------------------------
             login_user(email.split("@")[0], email, [])
-            
-            # LOAD USER DATA FROM DB
-            doc = db.collection("DATA-TALK2ME.USERS").document(email).get()
-            if doc.exists:
-                st.session_state.user_data = doc.to_dict()
-            
+
+            # HIDE LOADER
+            loader.empty()
+
+            # FINISH
             st.session_state.show_usage_step = True
             st.rerun()
-
 
 # ------------------------------
 # SIDEBAR USER INFO

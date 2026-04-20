@@ -27,6 +27,7 @@ def render():
         with apply_col:
             if st.button("💾 Apply & Save all Preprocessing changes"):
                 st.session_state['preprocessing']['APPLY_PREPROCESSING'] = True
+                utils.temp_show("✅ Data preprocessing successful ✅", 'success', dur=0.5)
         # =====================================================
         # 🔄 RESET
         # =====================================================

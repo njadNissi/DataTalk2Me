@@ -416,3 +416,21 @@ def draw_nn_architecture(input_size, hidden_layers, activation_fncs, output_size
     st.session_state['inference']['nn_update_btn_placeholder'] = update_btn
 
     return fig
+
+    
+    
+def conv_curves(dld_btn_key):
+    import io
+    buf = io.BytesIO()
+    fig = st.session_state['inference']['conv_curves']
+    fig.savefig(buf, format="svg", bbox_inches="tight")
+    buf.seek(0)
+
+    st.download_button(
+        label="📥 Download HQ image of Convergence Curve (SVG)",
+        data=buf,
+        file_name="convergence_curve.svg",
+        mime="image/svg+xml",
+        key=dld_btn_key  # ✅ Unique key
+    )
+    return buf, fig

@@ -56,18 +56,18 @@ def render():
             # Generate 2D Plot
             if plot_type == "Scatter":
                 fig = px.scatter(df, x=x, y=y, title=f"2D Scatter: {x} vs {y}")
-                fig.update_traces(marker=dict(size=3))
+                fig.update_traces(marker=dict(size=1))
             elif plot_type == "Line":
                 fig = px.line(df, x=x, y=y, title=f"2D Line: {x} vs {y}")
             else:  # Histogram
                 fig = px.histogram(df, x=x, title=f"Histogram: {x}")
             
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
     # --------------------------
     # 3D Visualization Section (Collapsible)
     # --------------------------
-    with st.expander("3D Visualization", expanded=False):
+    with st.expander("3D Visualization", expanded=True):
         if selected_data != 'my function':
             # 3D Plot from Dataset
             cols = df.columns.tolist()
@@ -103,7 +103,7 @@ def render():
                 title=f"3D Scatter: {x_3d}, {y_3d}, {z_label}"
             )
             fig_3d.update_traces(marker=dict(size=3))
-            st.plotly_chart(fig_3d, use_container_width=True)
+            st.plotly_chart(fig_3d, width='stretch')
         
         else:
             # ------------------------------------------
@@ -150,7 +150,7 @@ def render():
                         scene=dict(xaxis_title="X", yaxis_title="Y", zaxis_title="Z"),
                         autosize=True
                     )
-                    st.plotly_chart(fig_func, use_container_width=True)
+                    st.plotly_chart(fig_func, width='stretch')
 
             except Exception as e:
                 st.error(f"Invalid function: {str(e)}")

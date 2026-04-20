@@ -11,6 +11,7 @@ from sklearn.decomposition import PCA
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.model_selection import StratifiedKFold, KFold, cross_val_score
 from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import classification_report
 from sklearn.preprocessing import LabelEncoder
 
 
@@ -415,7 +416,6 @@ def perform_dimensionality_reduction(X:pd.DataFrame, y:pd.Series=None, feature_n
 # 4. MODEL EVALUATION (RAW vs REDUCED)
 # =========================================================
 def evaluate_reduction_performance(X, y, feature_names, save_dir='/mnt'):
-    print("\n=== Dimensionality Reduction Performance Evaluation ===")
 
     # 🚨 Safety checks (fix your previous errors)
     if X is None or y is None or X.empty or len(y) == 0:

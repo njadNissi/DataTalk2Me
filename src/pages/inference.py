@@ -88,7 +88,6 @@ def evaluate_model():
     y_pred = st.session_state['inference']["y_pred"]
     task = st.session_state['preprocessing']['task']
     target = st.session_state['preprocessing']['target']
-    run_evaluate = st.session_state['inference'].get('evaluate_btn_clicked', False)
 
     # Add this: Initialize session state for evaluation data
     if "evaluation_data" not in st.session_state:
@@ -275,7 +274,7 @@ def NN_builder():
                 st.session_state['inference']["nn_num_hidden_layers"] = num_layers
                 utils.temp_show("✅ New model compiled and loaded...", 'success', .5)
         # Show the plot below the buttons bar
-        st.pyplot(fig, use_container_width=True)
+        st.pyplot(fig, width='stretch')
 
             
 # =========================================================
@@ -305,11 +304,7 @@ def render():
     # =====================================================
     # 🧠 TASK TYPE
     # =====================================================
-    model_choice, partial_train_col, train_btn_col = st.columns([4, 3, 3])
-
-    # =====================================================
-    # 🤖 MODEL (FULL ORIGINAL)
-    # =====================================================
+    model_choice, partial_train_col, train_btn_col, reset_btn_col = st.columns([4, 2, 2, 2])
     with model_choice:
         task = st.session_state['preprocessing'].get("task")
         available_models = AIM.get_available_models(task)
@@ -317,17 +312,23 @@ def render():
             f"Choose a model for {task}:", available_models,
             index=available_models.index(st.session_state['inference'].get("model_name", available_models[0]))
         )
+        
         st.session_state['inference']["model_name"] = model_name
 
     if model_name == "Custom Neural Network": NN_builder();
 
-    
     # =====================================================
     # Choose or not partial training
     # =====================================================
     with partial_train_col:
         partial_train = st.checkbox("Partial Training (train button will be used for incremental training)", value=False)
         st.session_state['inference']["partial_training"] = partial_train
+
+    with reset_btn_col:
+        if st.button("♻️ Discard all preprocessing changes"):
+            st.session_state.pop("inference")
+            utils.temp_show("🔄 Reset successful ✅", 'success', dur=0.5)
+            st.rerun()
     
     # =====================================================
     # 🚀 TRAIN MODEL SECTION
@@ -402,19 +403,9 @@ def render():
                     st.session_state['inference']["y_pred"] = y_pred
 
                     # Download button (✅ WITH UNIQUE KEY)
-                    import io
-                    buf = io.BytesIO()
-                    fig = st.session_state['inference']['conv_curves']
-                    fig.savefig(buf, format="svg", bbox_inches="tight")
-                    buf.seek(0)
-
-                    st.download_button(
-                        label="📥 Download HQ image of Convergence Curve (SVG)",
-                        data=buf,
-                        file_name="convergence_curve.svg",
-                        mime="image/svg+xml",
-                        key="download_during_training"  # ✅ Unique key
-                    )
+                    buf, fig = AIM.conv_curves("conv_curves_in_training")
+                    plot_placeholder = st.session_state.get("plot_placeholder", st.empty())
+                    plot_placeholder.pyplot(fig)
 
             # Save trained model
             st.session_state['inference']["model"] = model
@@ -436,35 +427,15 @@ def render():
                 st.markdown("### ⚠️ Partial model fit does not support Early Stopping. Please disable it and update the model.")
             else:
                 st.error(f"❌ Training failed: {str(e)}")
-
-    # --------------------------
-    # Restore After Page Switch
-    # --------------------------
-    elif st.session_state['inference'].get("training_completed", False):
-        with st.session_state["training_status_container"].container():
-            with st.status("✅ Training complete!", expanded=True, state="complete"):
-                # Restore plot
-                fig = st.session_state['inference']['conv_curves']
-
-                # Download button (✅ WITH UNIQUE KEY)
-                import io
-                buf = io.BytesIO()
-                fig.savefig(buf, format="svg", bbox_inches="tight")
-                buf.seek(0)
-
-                st.download_button(
-                    label="📥 Download HQ image of Convergence Curve (SVG)",
-                    data=buf,
-                    file_name="convergence_curve.svg",
-                    mime="image/svg+xml",
-                    key="download_after_restore"  # ✅ Unique key
-                )
-                st.pyplot(fig)
         
     # =============================
     # 📊 EVALUATION
     # =============================
     if "y_test" in st.session_state['preprocessing'] and "y_pred" in st.session_state['inference']:
+        buf, fig = AIM.conv_curves("con_curves_post_training") 
+        plot_placeholder = st.session_state.get("plot_placeholder", st.empty())
+        plot_placeholder.pyplot(fig)
+
         with st.status("🔄 Initializing Model Evaluation...", expanded=True) as status:
 
             evaluate_model();
@@ -503,7 +474,7 @@ def render():
 
             btn_col, result_col = st.columns([2, 8])
             with btn_col:
-                predict_clicked = st.button("Predict", use_container_width=True)
+                predict_clicked = st.button("Predict", width='stretch')
             with result_col:
                 if predict_clicked:
                     try:
