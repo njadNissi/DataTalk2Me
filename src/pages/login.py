@@ -84,7 +84,6 @@ def show_user_info():
     st.sidebar.caption(f"Logins: {u.get('use_times', 0)}")
     usage = u.get("usage_purpose", [])
     st.sidebar.caption(f"For: {', '.join(usage[:3])}{'...' if len(usage) > 3 else ''}")
-    st.sidebar.markdown("---")
 
 # ------------------------------
 # LOGOUT

@@ -2,83 +2,75 @@ import time
 import streamlit as st
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import (
-    accuracy_score, f1_score, confusion_matrix,
-    mean_squared_error, r2_score
-)
-from sklearn.tree import plot_tree, export_graphviz
+from sklearn.metrics import accuracy_score, f1_score, confusion_matrix, mean_squared_error, r2_score
+from sklearn.tree import export_graphviz
 import matplotlib.pyplot as plt
 import seaborn as sns
 import graphviz
 from src.core import ai_models as AIM, utils
 
-
-def plot_clean_cm(y_test, y_pred, class_names=None, cbar=False):
-    if class_names:
-        cm = confusion_matrix(y_test, y_pred, labels=class_names)
-        fig, ax = plt.subplots(figsize=(5, 4))
-        sns.heatmap(
-            cm,
-            annot=True,
-            fmt="g",
-            cmap="coolwarm",
-            linecolor="white",
-            linewidth=2,
-            cbar=cbar,
-            # annot_kws={"weight": "bold", "size": size},
-            xticklabels=class_names,
-            yticklabels=class_names
-        )
+def init_session_state():
+    default = {
+        "partial_training": False, "train_btn_clicked": False,
+        "eval_btn_clicked": False, "training_completed": False,
+        "nn_num_hidden_layers": 2, "nn_max_iters": 100,
+        "nn_early_stopping": True, "model_name": "",
+        "model": None, "y_pred": None, "conv_curves": None,
+        "nn_update_btn_placeholder": None
+    }
+    if "inference" not in st.session_state:
+        st.session_state["inference"] = default
     else:
-        cm = confusion_matrix(y_test, y_pred)
-        fig, ax = plt.subplots(figsize=(5, 4))
-        sns.heatmap(
-            cm,
-            annot=True,
-            fmt="g",
-            cmap="coolwarm",
-            linecolor="white",
-            linewidth=2,
-            cbar=cbar,
-            # annot_kws={"weight": "bold", "size": size}
-        )
-    ax.set_title(f"Confusion Matrix | {st.session_state.get('model_name', 'Unknown')}", fontsize=12, pad=10)
-    ax.set_xlabel("Predicted Label", fontsize=12)
-    ax.set_ylabel("True Label", fontsize=12)
+        for k,v in default.items():
+            if k not in st.session_state["inference"]:
+                st.session_state["inference"][k] = v
+
+def plot_confusion_matrix(y_test, y_pred, class_names=None):
+    cm = confusion_matrix(y_test, y_pred)
+    
+    if class_names is None or len(class_names) == 0:
+        xticklabels = False
+        yticklabels = False
+    else:
+        xticklabels = class_names
+        yticklabels = class_names
+
+    fig, ax = plt.subplots(figsize=(3.2, 2.8))
+    sns.heatmap(
+        cm, annot=True, fmt="g", cmap="coolwarm",
+        linewidth=1, cbar=False,
+        xticklabels=xticklabels, yticklabels=yticklabels
+    )
+    ax.set_title("Confusion Matrix")
+    ax.set_xlabel("Predicted")
+    ax.set_ylabel("True")
     plt.tight_layout()
+
+    # ✅ EXPANDER + PNG + SVG DOWNLOADS
+    with st.expander("📊 Confusion Matrix", expanded=False):
+        st.pyplot(fig, width=1000)
+
+        # Save to buffers
+        import io
+        buf_png = io.BytesIO()
+        fig.savefig(buf_png, format="png", bbox_inches="tight", dpi=200)
+        buf_png.seek(0)
+
+        buf_svg = io.BytesIO()
+        fig.savefig(buf_svg, format="svg", bbox_inches="tight")
+        buf_svg.seek(0)
+
+        # Buttons side by side
+        col1, col2 = st.columns(2)
+        with col1:
+            st.download_button("📥 Download as PNG", data=buf_png, file_name="confusion_matrix.png", mime="image/png")
+        with col2:
+            st.download_button("📥 Download as SVG", data=buf_svg, file_name="confusion_matrix.svg", mime="image/svg+xml")
+
+    plt.close(fig)
     return fig
 
-
-def generate_svg_decision_tree():
-    try:
-        target_col = st.session_state["preprocessing"]["target"]
-        target_enc = st.session_state.get(f"{target_col}_encoder", None)
-        dot_data = export_graphviz(
-            st.session_state['inference']["model_name"],
-            out_file=None,
-            feature_names=st.session_state["preprocessing"].get("feature_names"),
-            class_names= target_enc.classes_.tolist() if target_enc is not None else None,
-            filled=True,
-            rounded=True,
-            special_characters=True
-        )
-
-        graph = graphviz.Source(dot_data)
-        svg_data = graph.pipe(format="svg")
-
-        st.download_button(
-            label="📥 Download Tree (SVG)",
-            data=svg_data,
-            file_name="decision_tree.svg",
-            mime="image/svg+xml"
-        )
-
-    except Exception as e:
-        st.warning(f"Could not export tree: {e}")
-
-
-def evaluate_model():
+def run_model_evaluation():
     if not "y_test" in st.session_state["preprocessing"] or not "y_pred" in st.session_state["inference"]:
         st.warning("Train the model first to see evaluation metrics.")
         return
@@ -124,13 +116,11 @@ def evaluate_model():
         st.subheader(eval_header)
         
         if labels_display is not None:
-            fig = plot_clean_cm(y_test_disp, y_pred_disp, class_names=labels_display)
+            fig = plot_confusion_matrix(y_test_disp, y_pred_disp, class_names=labels_display)
             st.session_state["evaluation_data"]["fig"] = fig  # Save plot to session state
-            st.pyplot(fig, width=1000)
         else:
-            fig = plot_clean_cm(y_test_disp, y_pred_disp)
+            fig = plot_confusion_matrix(y_test_disp, y_pred_disp)
             st.session_state["evaluation_data"]["fig"] = fig  # Save plot to session state
-            st.pyplot(fig, width=1000)
 
     else: # Regression
         target_scaled = st.session_state.get("is_target_scaled", False)
@@ -139,7 +129,6 @@ def evaluate_model():
             y_test = target_scaler.inverse_transform(y_test.values.reshape(-1, 1)).flatten()
             y_pred = target_scaler.inverse_transform(y_pred.reshape(-1, 1)).flatten()
 
-        
         mse = mean_squared_error(y_test, y_pred)
         r2 = r2_score(y_test, y_pred)
         eval_header = f"📊 {model_name} Evaluation: `MSE: {mse}` | `R²: {r2 * 100:.2f}% ({r2})`"
@@ -164,30 +153,79 @@ def evaluate_model():
             st.markdown(formula)
             st.session_state["evaluation_data"]["formula"] = formula  # Save formula
 
+    # --------------------------
+    # ✅ DECISION TREE - SVG FORMAT (Zoomable, Sharp)
+    # --------------------------
+    if "Decision Tree" in model_name:
+        with st.expander("🌳 Decision Tree (SVG - Zoomable)", expanded=False):
+            try:
+                import io
+                from sklearn.tree import export_graphviz
+                import pydotplus
 
-def NN_builder():
-    with st.expander("🧠 Build YNeural Network (Hidden Layers)", expanded=True):
+                # Export to DOT
+                dot_data = export_graphviz(
+                    model,
+                    out_file=None,
+                    feature_names=feature_names,
+                    filled=True,
+                    rounded=True,
+                    special_characters=True
+                )
+
+                # Create SVG
+                graph = pydotplus.graph_from_dot_data(dot_data)
+                svg_data = graph.create_svg()
+
+                # Display SVG in Streamlit
+                st.markdown(f"<div style='overflow:auto'>{svg_data.decode('utf-8')}</div>", unsafe_allow_html=True)
+                st.download_button("📥 Download as SVG Tree", data=svg_data, file_name="decision_tree.svg", mime="image/svg+xml")
+
+            except Exception as e:
+                st.info(e)
+
+def build_neural_network_ui():
+    """
+    Fully compatible Neural Network builder UI with proper session state handling
+    and integration with existing codebase
+    """
+    # Initialize session state defaults if missing
+    if "inference" not in st.session_state:
+        st.session_state['inference'] = {}
+    
+    if "nn_num_hidden_layers" not in st.session_state['inference']:
+        st.session_state['inference']["nn_num_hidden_layers"] = 2
+    
+    if "nn_max_iters" not in st.session_state['inference']:
+        st.session_state['inference']["nn_max_iters"] = 100
+    
+    if "nn_early_stopping" not in st.session_state['inference']:
+        st.session_state['inference']["nn_early_stopping"] = True
+
+    with st.expander("🧠 Build Your Neural Network (Hidden Layers)", expanded=True):
         # 1. Number of hidden layers
         num_layers = st.number_input(
             "Number of hidden layers",
             min_value=1,
             max_value=20,
-            value=st.session_state['inference'].get("nn_num_hidden_layers", 2),
-            step=1
+            value=st.session_state['inference']["nn_num_hidden_layers"],
+            step=1,
+            key="nn_num_layers_input"
         )
-        st.info("Note on Activations: `[1] Output:` Classification `uses` logistic `for binary and` softmax `for multi-class (supports single class & probability distribution).` Regression `uses` linear (no activation). [2] All hidden layers share one activation; [3] The diagram shows your unmodified design.")
+        st.info(
+            "📝 Notes on Activations:\n"
+            "1. Output layer: Classification uses logistic (binary)/softmax (multi-class), Regression uses linear\n"
+            "2. All hidden layers share ONE activation function (sklearn MLP limitation)\n"
+            "3. Diagram shows your network architecture in real-time"
+        )
 
         # 2. Dynamic HORIZONTAL layout: LAYER -> ACTIVATION -> LAYER -> ACTIVATION ...
         hidden_layer_sizes = []
         activation_functions = []
         ACTIVATIONS = ["relu", "tanh", "logistic", "identity"]
 
-        # --------------------------
-        # HORIZONTAL LAYER + ACTIVATION ROW (your exact request)
-        # --------------------------
-        # We build ONE ROW with: [Layer] [Activation] [Layer] [Activation] ...
-        # Total widgets: layers + (layers - 1 activations)
-        total_widgets = num_layers + (num_layers - 1)
+        # Calculate total widgets and create columns (handle edge case for 1 layer)
+        total_widgets = num_layers + (num_layers - 1) if num_layers > 1 else num_layers
         cols = st.columns(total_widgets)
 
         col_idx = 0
@@ -196,13 +234,14 @@ def NN_builder():
             # HIDDEN LAYER NEURONS
             # ----------------------
             with cols[col_idx]:
+                # Use unique key with num_layers to prevent widget state issues
                 neurons = st.number_input(
-                    f"Layer {layer_i + 1}",
+                    f"Layer {layer_i + 1} Neurons",
                     min_value=2,
                     max_value=512,
                     value=4,
                     step=1,
-                    key=f"layer_{layer_i}"
+                    key=f"nn_layer_{num_layers}_{layer_i}_neurons"
                 )
                 hidden_layer_sizes.append(neurons)
             col_idx += 1
@@ -214,29 +253,35 @@ def NN_builder():
                 with cols[col_idx]:
                     st.markdown("### <div style='text-align:center'>→</div>", unsafe_allow_html=True)
                     act = st.selectbox(
-                        f"Act {layer_i + 1}",
+                        f"Activation {layer_i + 1}",
                         options=ACTIVATIONS,
                         index=0,
-                        key=f"act_{layer_i}"
+                        key=f"nn_activation_{num_layers}_{layer_i}",
+                        label_visibility="collapsed"
                     )
                     activation_functions.append(act)
                 col_idx += 1
 
-        # 3. max iterations
+        # 3. Training parameters (max iterations + early stopping)
         max_ter_col, early_stop_col = st.columns(2)
         with max_ter_col:
             max_iters = st.number_input(
-                "Maximum iterations",
+                "Maximum Iterations",
                 min_value=100,
                 max_value=10000,
-                value=100,
-                step=5
+                value=st.session_state['inference']["nn_max_iters"],
+                step=5,
+                key="nn_max_iters_input"
             )
             st.session_state['inference']["nn_max_iters"] = max_iters
 
-        # 4. Early stopping
         with early_stop_col:
-            early_stopping = st.checkbox("Enable Early Stopping (Early-stopping models do not allow partial training!)", value=True)
+            early_stopping = st.checkbox(
+                "Enable Early Stopping",
+                value=st.session_state['inference']["nn_early_stopping"],
+                key="nn_early_stopping_checkbox",
+                help="⚠️ Early-stopping models do not support partial training!"
+            )
             st.session_state['inference']["nn_early_stopping"] = early_stopping
 
         # --------------------------
@@ -244,278 +289,191 @@ def NN_builder():
         # --------------------------
         st.markdown("### 🧠 Live Network Architecture")
 
+        # Safely get input size from session state (fallback to 10 if not available)
         X_train = st.session_state['preprocessing'].get("X_train", None)
-        input_size = X_train.shape[1] if X_train is not None else 10
+        input_size = X_train.shape[1] if (X_train is not None and hasattr(X_train, 'shape')) else 10
+        
+        # Safely get task and output size
         task = st.session_state['preprocessing'].get("task", "regression")
-        num_of_classes = len(st.session_state["preprocessing"].get("target_labels", [0, 1]))
+        target_labels = st.session_state["preprocessing"].get("target_labels", [0, 1])
+        num_of_classes = len(target_labels) if isinstance(target_labels, (list, np.ndarray)) else 2
         output_size = 1 if task == "regression" else num_of_classes
 
-        # Draw and display
-        fig = AIM.draw_nn_architecture(
-            input_size=input_size,
-            hidden_layers=hidden_layer_sizes,
-            activation_fncs=activation_functions,
-            output_size=output_size
-        )
+        # Draw and display network architecture
+        try:
+            fig = AIM.draw_nn_architecture(
+                input_size=input_size,
+                hidden_layers=hidden_layer_sizes,
+                activation_fncs=activation_functions,
+                output_size=output_size
+            )
+        except Exception as e:
+            st.warning(f"⚠️ Could not render network diagram: {e}")
+            # Create fallback figure
+            fig, ax = plt.subplots(figsize=(7, 4.5))
+            ax.text(0.5, 0.5, f"Network Architecture\nInput: {input_size} → Hidden: {hidden_layer_sizes} → Output: {output_size}", 
+                   ha='center', va='center', fontsize=12)
+            ax.axis('off')
 
-        update_btn = st.session_state['inference']['nn_update_btn_placeholder']
-        with update_btn:
-            if st.button("💾 Update the model with this architecture --->(⚠️ this will reset the trained model to initial settings)"):
-                # Use first activation (sklearn MLP only supports ONE global activation)
-                final_act = activation_functions[0] if activation_functions else "relu"
-                
-                st.session_state['inference']["model"] = AIM.build_nn_model(
-                    task, 
-                    hidden_layer_sizes, 
-                    final_act,
-                    early_stopping,
-                    max_iters
+        # Create update button row (fix placeholder issue)
+        if st.button(
+            "💾 Update Model Architecture",
+            key="nn_update_model_btn",
+            help="⚠️ This will reset the trained model to initial settings!"
+        ):
+            # Use first activation (sklearn MLP only supports ONE global activation)
+            final_act = activation_functions[0] if activation_functions else "relu"
+            
+            # Build the model using AIM module
+            try:
+                new_model = AIM.build_nn_model(
+                    task=task,
+                    hidden_layer_sizes=hidden_layer_sizes,
+                    activation_fnc=final_act,
+                    early_stopping=early_stopping,
+                    max_iter=max_iters
                 )
+                
+                # Update session state
+                st.session_state['inference']["model"] = new_model
                 st.session_state['inference']["nn_num_hidden_layers"] = num_layers
-                utils.temp_show("✅ New model compiled and loaded...", 'success', .5)
-        # Show the plot below the buttons bar
+                st.session_state['inference']["model_name"] = "Custom Neural Network"  # Match dropdown value
+                
+                # Show success message
+                utils.temp_show("✅ New model compiled and loaded!", 'success', 0.5)
+                st.rerun()  # Refresh to reflect changes
+                
+            except Exception as e:
+                st.error(f"❌ Failed to build model: {str(e)}")
+
+        # Show the network diagram
         st.pyplot(fig, width='stretch')
 
-            
-# =========================================================
-#                     📊 MAIN PAGE
-# =========================================================
-def render():
-    st.title("🤖 AI Training & Inference")
-    if "data" not in st.session_state:
-        st.warning("⚠️ No dataset loaded")
-        return
-    elif not "preprocessing" in st.session_state:
-        st.warning("⚠️ Preprocess the data first")
+def render_prediction_ui():
+    st.markdown("---")
+    st.subheader(f"🔮 Predict {st.session_state['preprocessing']['target']}")
+    model = st.session_state["inference"].get("model")
+    if not model:
+        st.info("Train first")
         return
 
-    if "inference" not in st.session_state:
-        st.session_state['inference'] = {};
-    try:
-        data_size = st.session_state['preprocessing'].get("data_size")
-        test_size = st.session_state['preprocessing'].get("test_size")
-        test_size_percent = test_size * 100
-        train_size_percent = 100 - test_size_percent
-        st.write(f"Train set size: {train_size_percent:.0f}% = {int(data_size * (1-test_size))} samples |"\
-            f" Test set size: {test_size_percent:.0f}% = {int(data_size * test_size)} samples")
-    except Exception as e:
-        pass
+    feats = st.session_state["preprocessing"]["feature_names"]
+    data = {}
 
-    # =====================================================
-    # 🧠 TASK TYPE
-    # =====================================================
-    model_choice, partial_train_col, train_btn_col, reset_btn_col = st.columns([4, 2, 2, 2])
-    with model_choice:
-        task = st.session_state['preprocessing'].get("task")
-        available_models = AIM.get_available_models(task)
-        model_name = st.selectbox(
-            f"Choose a model for {task}:", available_models,
-            index=available_models.index(st.session_state['inference'].get("model_name", available_models[0]))
-        )
-        
-        st.session_state['inference']["model_name"] = model_name
+    # ✅ USER-CHOOSABLE COLUMNS (1 to 10)
+    cols_per_row = st.slider(
+        "Number of input columns per row",
+        min_value=1,
+        max_value=10,
+        value=4,  # default
+        step=1
+    )
 
-    if model_name == "Custom Neural Network": NN_builder();
+    # Dynamic grid layout
+    for i in range(0, len(feats), cols_per_row):
+        row_features = feats[i:i+cols_per_row]
+        columns = st.columns(len(row_features))
 
-    # =====================================================
-    # Choose or not partial training
-    # =====================================================
-    with partial_train_col:
-        partial_train = st.checkbox("Partial Training (train button will be used for incremental training)", value=False)
-        st.session_state['inference']["partial_training"] = partial_train
+        for col, feat_name in zip(columns, row_features):
+            with col:
+                data[feat_name] = st.number_input(
+                    feat_name, value=0.0, format="%.4f"
+                )
 
-    with reset_btn_col:
-        if st.button("♻️ Discard all preprocessing changes"):
-            st.session_state.pop("inference")
-            utils.temp_show("🔄 Reset successful ✅", 'success', dur=0.5)
-            st.rerun()
-    
-    # =====================================================
-    # 🚀 TRAIN MODEL SECTION
-    # =====================================================
-    st.session_state["plot_placeholder"] = st.empty()
+    if st.button("Predict", width='stretch'):
+        df = pd.DataFrame([data])
+        pred = model.predict(df)
+        st.success(f"Result: {pred[0]}")
 
-    # Initialize persistent containers FIRST
+def run_model_training():
+    if not st.session_state["inference"]["train_btn_clicked"]:
+        return
     if "training_status_container" not in st.session_state:
         st.session_state["training_status_container"] = st.empty()
+    try:
+        with st.session_state["training_status_container"].container():
+            with st.status("Training...", expanded=True) as status:
+                mn = st.session_state["inference"]["model_name"]
+                task = st.session_state["preprocessing"]["task"]
 
-    # Track if training was completed (persists after page switch)
-    if "training_completed" not in st.session_state['inference']:
-        st.session_state['inference']['training_completed'] = False
+                if mn == "Custom Neural Network":
+                    model = st.session_state["inference"].get("model")
+                else:
+                    model = AIM.get_model(task, mn)
 
-    # Train Button
-    with train_btn_col:
-        btn_label = "🚀 Train Model"
-        if partial_train:
-            if st.session_state['inference']['training_completed']:
-                btn_label = "🚀 Continue Training: 30 more epochs"  # Partial: 2nd+ pass
-            else:
-                btn_label = "🚀 Start Training: 30 epochs"     # Partial: first run
+                Xt = st.session_state["preprocessing"]["X_train"]
+                Xte = st.session_state["preprocessing"]["X_test"]
+                yt = st.session_state["preprocessing"]["y_train"]
+                yte = st.session_state["preprocessing"]["y_test"]
 
-        if st.button(btn_label):
-            st.session_state['inference']['train_btn_clicked'] = True
+                AIM.train_model(model, Xt, yt, Xte, yte, task, st.session_state["inference"]["partial_training"])
 
-    # --------------------------
-    # Training Execution Flow
-    # --------------------------
-    if st.session_state['inference'].get("train_btn_clicked", False):
-        try:
-            with st.session_state["training_status_container"].container():
-                with st.status("🔄 Initializing...", expanded=True) as status:
-                    progress_bar = st.progress(0)
+                # Save model & predictions
+                st.session_state["inference"]["model"] = model
+                st.session_state["inference"]["y_pred"] = model.predict(Xte)
+                st.session_state["inference"]["training_completed"] = True
 
-                    # Step 1: Initialize
-                    status.update(label="🔧 Initializing training process...", state="running")
-                    time.sleep(0.5)
-                    progress_bar.progress(10)
+                status.update(label="✅ Training complete!", state="complete")
 
-                    # Step 2: Load Model
-                    status.update(label="📥 Loading model architecture...", state="running")
-                    if model_name == "Custom Neural Network":
-                        model = st.session_state['inference']["model"]
-                    else:
-                        model = AIM.get_model(task, model_name)
-                    time.sleep(0.5)
-                    progress_bar.progress(25)
+    except Exception as e:
+        if "'NoneType' object has no attribute 'fit'" in str(e):
+            st.warning("⚠️ Update the model before you train!")
+        else:
+            st.error(f"Error: {e}")
+        st.rerun()
+    finally:
+        st.session_state["inference"]["train_btn_clicked"] = False
 
-                    # Step 3: Load Data
-                    status.update(label="📂 Loading train/test data...", state="running")
-                    X_train = st.session_state['preprocessing'].get("X_train")
-                    X_test = st.session_state['preprocessing'].get("X_test")
-                    y_train = st.session_state['preprocessing'].get("y_train")
-                    y_test = st.session_state['preprocessing'].get("y_test")
-                    time.sleep(0.5)
-                    progress_bar.progress(40)
 
-                    # Step 4: Train
-                    status.update(label="🚀 Training model...", state="running")
-                    AIM.train_model(model, X_train, y_train, X_test, y_test, task, partial_train, status)
-                    progress_bar.progress(80)
+def render():
+    st.title("🤖 Inference")
+    if "data" not in st.session_state or "preprocessing" not in st.session_state:
+        st.warning("Upload & preprocess data first")
+        return
 
-                    # Step 5: Validate Predictions
-                    status.update(label="✅ Validating predictions...", state="running")
-                    y_pred = model.predict(X_test)
-                    time.sleep(0.5)
-                    progress_bar.progress(100)
+    init_session_state()
+    task = st.session_state["preprocessing"]["task"]
+    available_models = AIM.get_available_models(task)
 
-                    # Finalize
-                    status.update(label="✅ Training complete!", state="complete")
-                    st.session_state['inference']["y_pred"] = y_pred
+    if not available_models:
+        st.error("No models available")
+        return
 
-                    # Download button (✅ WITH UNIQUE KEY)
-                    buf, fig = AIM.conv_curves("conv_curves_in_training")
-                    plot_placeholder = st.session_state.get("plot_placeholder", st.empty())
-                    plot_placeholder.pyplot(fig)
+    # ✅ FIXED: No more ValueError
+    current_model = st.session_state["inference"].get("model_name")
+    if current_model not in available_models:
+        current_model = available_models[0]
 
-            # Save trained model
-            st.session_state['inference']["model"] = model
-            st.session_state['inference']['training_completed'] = True
+    mcol, pcol, tcol, rcol = st.columns([4,2,2,2])
+    with mcol:
+        model_name = st.selectbox("Model", available_models, index=available_models.index(current_model))
+        st.session_state["inference"]["model_name"] = model_name
 
-            # Decision tree visualization if needed
-            if st.session_state['inference']["model_name"] == "Decision Tree":
-                generate_svg_decision_tree()
+    if model_name == "Custom Neural Network":
+        build_neural_network_ui()
 
-            # Reset train flag
-            st.session_state['inference']["train_btn_clicked"] = True
-            st.session_state['inference']["eval_btn_clicked"] = False
+    with pcol:
+        pt = st.checkbox("Partial Training", value=st.session_state["inference"]["partial_training"])
+        st.session_state["inference"]["partial_training"] = pt
 
-        except Exception as e:
-            st.session_state['inference']['training_completed'] = False
-            if isinstance(e, KeyError) and "model" in str(e) or "object has no attribute 'fit'" in str(e):
-                st.markdown("### ⚠️ Your new model is not yet loaded into memory. Please press `Update model...`")
-            elif "early_stopping=True" in str(e):
-                st.markdown("### ⚠️ Partial model fit does not support Early Stopping. Please disable it and update the model.")
-            else:
-                st.error(f"❌ Training failed: {str(e)}")
-        
-    # =============================
-    # 📊 EVALUATION
-    # =============================
-    if "y_test" in st.session_state['preprocessing'] and "y_pred" in st.session_state['inference']:
-        buf, fig = AIM.conv_curves("con_curves_post_training") 
-        plot_placeholder = st.session_state.get("plot_placeholder", st.empty())
-        plot_placeholder.pyplot(fig)
+    with rcol:
+        if st.button("Reset"):
+            st.session_state.pop("inference")
+            st.rerun()
 
-        with st.status("🔄 Initializing Model Evaluation...", expanded=True) as status:
+    with tcol:
+        if st.button("Train"):
+            st.session_state["inference"]["train_btn_clicked"] = True
 
-            evaluate_model();
+    run_model_training()
 
-            status.update(label="✅ Evaluation ready!", state="complete")
+    if st.session_state["inference"]["training_completed"]:
+        with st.expander("Model Conversion Curves"):
+            buf, fig = AIM.conv_curves("conv_curves_in_training")
+            st.pyplot(fig, width="stretch")
 
-            # =====================================================
-            # 🔮 PREDICTION
-            # =====================================================
-            st.markdown("---")
-            st.subheader("🔮 Predict")
-            if "model" not in st.session_state['inference']:
-                st.info("Train model first")
-                return
-
-            model = st.session_state['inference']["model"]
-            cols = st.session_state['preprocessing']["feature_names"]
-            features_scaler = st.session_state['preprocessing'].get("features_scaler")
-            scaled_cols = st.session_state['preprocessing'].get("are_features_scaled", [])
-            target_scaler = st.session_state['preprocessing'].get("target_scaler")
-            target_scaled = st.session_state['preprocessing'].get("is_target_scaled", False)
-
-            # Split the columns into chunks of 5 for each row
-            input_data = {}
-            cols_per_row = 10
-            for i in range(0, len(cols), cols_per_row):
-                # Get the next 5 columns for this row
-                row_cols = cols[i:i+cols_per_row]
-                st_cols = st.columns(len(row_cols))  # Makes 5 equal-width columns
-                
-                # Add one number input per column in the row
-                for idx, col_name in enumerate(row_cols):
-                    with st_cols[idx]:
-                        val = st.number_input(col_name, value=0.0, format="%.4f")
-                        input_data[col_name] = val
-
-            btn_col, result_col = st.columns([2, 8])
-            with btn_col:
-                predict_clicked = st.button("Predict", width='stretch')
-            with result_col:
-                if predict_clicked:
-                    try:
-                        input_df = pd.DataFrame([input_data])
-
-                        # Apply feature scaling (unchanged)
-                        if features_scaler is not None and len(scaled_cols) > 0:
-                            cols_to_scale = [c for c in scaled_cols if c in input_df.columns]
-                            if len(cols_to_scale) > 0:
-                                input_df[cols_to_scale] = features_scaler.transform(input_df[cols_to_scale])
-
-                        pred = model.predict(input_df)
-
-                        # Inverse target scaling (unchanged)
-                        if task == "regression":
-                            if target_scaled and target_scaler is not None:
-                                pred = target_scaler.inverse_transform(pred.reshape(-1, 1)).flatten()
-                            st.markdown(f"### `{pred[0]:.4f}`")
-
-                        elif task == "classification":
-                            st.markdown(f"### Most likely class: `{pred[i]}`")
-                            st.markdown(f"## Classes Probabilities Distibution:")
-
-                            class_name_mapping = st.session_state.get("class_names_mapping", None)
-                            pred_prob = model.predict_proba(input_df)[0]
-                            pred_cols = st.columns(len(pred_prob))
-                            if class_name_mapping is not None:
-                                class_names = list(class_name_mapping.keys())
-                                for i in range(len(pred_prob)):
-                                    with pred_cols[i]:
-                                        st.markdown(f"### {class_names[i]}: `{pred_prob[i]}`")
-                            else:
-                                for i in range(len(pred_prob)):
-                                    with pred_cols[i]:
-                                        st.markdown(f"### class {i}: `{pred_prob[i]}`")
-                                
-                    except Exception as e:
-                        if "'NoneType' object has no attribute 'predict'" in str(e):
-                            st.markdown("### ⚠️ Your new model is not yet loaded into memory. Please, Press `Update model...` to do so.")
-
-                        st.error(f"❌ Prediction error: {e}")
+        run_model_evaluation()
+        render_prediction_ui()
 
 if __name__ == "__main__":
     render()

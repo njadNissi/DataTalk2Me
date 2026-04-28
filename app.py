@@ -19,8 +19,10 @@ st.set_page_config(layout="wide", page_title="Let data talk to Me.")
 DEV_MODE = "--dev" in sys.argv # RUN as: reamlit run app.py -- --dev (-- → tells Streamlit: “all args after this are for MY app, not for Streamlit”)
 
 # DEV USER (auto-login)
+st.session_state.dev_mode = False
 if DEV_MODE:
     st.session_state.logged_in = True
+    st.session_state.dev_mode = True
     st.session_state.user_data = {
         "user_name": "dev_user",
         "email": "dev@test.com",
@@ -47,6 +49,11 @@ st.sidebar.title("� Data Talk to Me")
 # SHOW USER INFO + USERNAME IN SIDEBAR
 # --------------------------
 login.show_user_info()
+# --------------------------
+# ✅ LOGOUT BUTTON
+# --------------------------
+login.logout()
+st.sidebar.markdown("---")
 
 pages = [
     "Upload Data",
@@ -59,7 +66,6 @@ pages = [
 
 if "page" not in st.session_state:
     st.session_state["page"] = "Upload Data"
-
 page = st.sidebar.radio(
     "Navigation",
     pages,
@@ -67,23 +73,6 @@ page = st.sidebar.radio(
 )
 
 st.session_state["page"] = page
-
-if "data" not in st.session_state:
-    st.session_state.data = None
-
-st.sidebar.subheader("📂 Load Previous Analysis")
-
-uploaded_file = st.sidebar.file_uploader(
-    "Choose a .pkl file",
-    type=["pkl"]
-)
-if uploaded_file is not None:
-    try:
-        loaded_results = pickle.load(uploaded_file)
-        st.session_state["analysis_results"] = loaded_results
-        st.success("✅ Analysis loaded successfully!")
-    except Exception as e:
-        st.error(f"❌ Failed to load file: {e}")
 
 if page == "Upload Data":
     upload.render()
@@ -97,12 +86,6 @@ elif page == "Inference":
     inference.render()
 elif page == "Usage Review":
     usage_review.render()
-
-# --------------------------
-# ✅ LOGOUT BUTTON
-# --------------------------
-st.sidebar.markdown("---")
-login.logout()
 
 st.sidebar.markdown("---")
 st.sidebar.markdown('<span style="font-size: 11px;">Author:\nJoao Andre Ndombasi *Diakusala*</span>', unsafe_allow_html=True)

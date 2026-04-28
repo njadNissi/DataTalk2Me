@@ -5,6 +5,12 @@ import os
 from src.core import feature_analysis as fan, dataset_processing as dsp, utils as utils
 import ast 
 from src.core.image_lab import * 
+import requests
+import io
+from PIL import Image, ImageOps, ImageEnhance
+import rembg
+from zipfile import ZipFile
+import base64
 
 # =========================================================
 # 🔐 STATE INITIALIZATION
@@ -24,6 +30,9 @@ def init_state():
         
     if "imglab" not in st.session_state:
         st.session_state["imglab"] = {}
+    
+    if "python_script" not in st.session_state:
+        st.session_state["python_script"] = ""  # Fix: Initialize missing state
 
 
 def retouch_history(keep_last: int = 2):
@@ -85,7 +94,6 @@ def render():
 
         # Get all CSV files in data/ folder
         csv_files = [f for f in os.listdir("data") if f.endswith(".csv")]
-
         if csv_files:
             cols = st.columns(len(csv_files))
             for i, file in enumerate(csv_files):
@@ -245,6 +253,7 @@ def render():
             with pycol1:
                 previous_code = st.session_state.get("python_script", "")
                 user_code = st.text_area("Python 3.x interpreter",
+                    value=previous_code,  # Fix: Set default value to preserve code
                     height=120, 
                     help="[1] Can use multiline code\n[2] Use prefix 'col_' in column name to create new columns):\n\tn = len(x0)\n\tcol_x0 = np.arange(-5,5)\n\tcol_x1 = np.random.randint(-10,15)\n\tcol_x2 = x0 - x1**2"
                 )
@@ -274,15 +283,22 @@ def render():
                         }
                         exec(user_code, global_env, local_env)
 
+                        # Fix: Track valid new columns first
+                        new_cols = []
                         for key, value in local_env.items():
                             if not key.startswith("col_"):
                                 continue  # Only process variables starting with col_
                             
                             col_name = key.replace("col_", "") # Only process variables named col_...
-                     
+                         
                             # Convert to numpy array (safe handling)
                             if isinstance(value, (list, np.ndarray)):
                                 arr = np.array(value)
+
+                                # Fix: Length check BEFORE processing
+                                if len(arr) != len(df_temp):
+                                    st.warning(f"⚠️ '{col_name}' length mismatch ({len(arr)} vs {len(df_temp)}) — skipped")
+                                    continue
 
                                 try:
                                     arr = arr.astype(np.int64)
@@ -298,14 +314,11 @@ def render():
                                     st.caption(f"Encoded '{col_name}' with mapping: {mapping}.")
                                 
                                 df_temp[col_name] = arr
-
-                            # 🔴 FIX 2: Length match check
-                            if len(value) != len(df_temp):
-                                st.warning(f"⚠️ '{col_name}' length mismatch — skipped")
-                                continue
+                                new_cols.append(col_name)
 
                         update_data(df_temp)
-                        st.session_state["history"].append((f"Generated columns [{', '.join(key[4:] for key in local_env if key.startswith('col_'))}] via code", df.copy()))
+                        if new_cols:
+                            st.session_state["history"].append((f"Generated columns [{', '.join(new_cols)}] via code", df.copy()))
                         st.session_state['python_script'] = user_code
                         st.rerun()
 
@@ -410,8 +423,8 @@ def render():
                 with col_ex[i]:
                     if st.button(f"🖼️ {name}"):
                         try:
-                            import requests, io
                             response = requests.get(url)
+                            response.raise_for_status()  # Fix: Add error handling for bad requests
                             img = Image.open(io.BytesIO(response.content)).convert("RGB")
                             st.session_state['imglab']["original_image"] = img
                             st.session_state['imglab']["edited_image"] = img.copy()
@@ -468,42 +481,69 @@ def render():
                         aspect_ratio = (9, 16)
                     else:
                         aspect_ratio = None  # Free
-
+                    
+                    # Fix: Initialize selected_effect to avoid NameError in batch processing
+                    selected_effect = None
+                    
                     if st.button("🖼️ Apply cropping"):
-                        st.session_state['history'].append((f'Image cropped with aspect: {crop_aspect}', edited_img.copy()))
+                        try:
+                            # Fix: Use streamlit-cropper correctly (assuming st_cropper is installed)
+                            from streamlit_cropper import st_cropper
+                            cropped_img = st_cropper(
+                                original_img,
+                                realtime_update=False,
+                                box_color="#1f77b4",
+                                aspect_ratio=aspect_ratio
+                            )
+                            st.session_state['imglab']["edited_image"] = cropped_img
+                            st.session_state['imglab']['history'].append((f'Image cropped with aspect: {crop_aspect}', cropped_img.copy()))
+                            st.rerun()
+                        except ImportError:
+                            st.error("⚠️ Install streamlit-cropper first: `pip install streamlit-cropper`")
+                        except Exception as e:
+                            st.error(f"❌ Crop error: {e}")
 
                     # Resize
                     st.subheader("📏 Resize")
-                    width = st.number_input("Width (px)", min_value=100, value=edited_img.width)
-                    height = st.number_input("Height (px)", min_value=100, value=edited_img.height)
+                    width = st.number_input("Width (px)", min_value=10, value=edited_img.width)
+                    height = st.number_input("Height (px)", min_value=10, value=edited_img.height)
                     if st.button("🔄 Resize Image"):
-                        edited_img = edited_img.resize((width, height), Image.Resampling.LANCZOS)
-                        st.session_state['imglab']["edited_image"] = edited_img
-                        st.session_state['imglab']['history'].append((f'Image resized to ({width}x{height})', edited_img.copy()))
-                        st.rerun()
+                        try:
+                            edited_img = edited_img.resize((width, height), Image.Resampling.LANCZOS)
+                            st.session_state['imglab']["edited_image"] = edited_img
+                            st.session_state['imglab']['history'].append((f'Image resized to ({width}x{height})', edited_img.copy()))
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Resize error: {e}")
                     
                     # Rotate/Flip
                     st.subheader("🔄 Rotate/Flip")
                     rotate_deg = st.slider("Rotate (degrees)", 0, 360, 0)
-                    flip_horizontal = st.checkbox("Flip Horizontal")
-                    flip_vertical = st.checkbox("Flip Vertical")
-                
-                    if st.button("✅ Apply Rotate/Flip"):
-                        edited_img = edited_img.rotate(rotate_deg, expand=True)
-                        if flip_horizontal:
-                            edited_img = ImageOps.mirror(edited_img)
-                            st.session_state['imglab']['history'].append(('Image horizontally flipped', edited_img.copy()))
-                        if flip_vertical:
-                            edited_img = ImageOps.flip(edited_img)
-                            st.session_state['history'].append(('Image vertically flipped', edited_img.copy()))
-                        st.session_state['imglab']["edited_image"] = edited_img
-                        st.rerun()
                     
-                    # Reset basic edits
-                    if st.button("🔄 Reset Basic Edits", type="secondary"):
-                        st.session_state['imglab']["edited_image"] = original_img.copy()
-                        st.session_state['imglab']['history'] = [(f'`{name}` example image loaded', img.copy())]
-                        st.rerun()
+                    rotate_cols = st.columns(2)
+                    with rotate_cols[0]:
+                        flip_horizontal = st.checkbox("Flip Horizontal")
+                        flip_vertical = st.checkbox("Flip Vertical")
+                    with rotate_cols[1]:
+                        if st.button("✅ Apply Rotate/Flip"):
+                            try:
+                                edited_img = edited_img.rotate(rotate_deg, expand=True)
+                                if flip_horizontal:
+                                    edited_img = ImageOps.mirror(edited_img)
+                                if flip_vertical:
+                                    edited_img = ImageOps.flip(edited_img)
+                                st.session_state['imglab']["edited_image"] = edited_img
+                                st.session_state['imglab']['history'].append((f'Image rotated {rotate_deg}° + flip H:{flip_horizontal} V:{flip_vertical}', edited_img.copy()))
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"❌ Rotate/flip error: {e}")
+                        
+                        # Reset basic edits
+                        if st.button("🔄 Reset Basic Edits", type="secondary"):
+                            st.session_state['imglab']["edited_image"] = original_img.copy()
+                            # Fix: Preserve original history instead of overwriting
+                            st.session_state['imglab']['history'].append(('Basic edits reset', original_img.copy()))
+                            st.rerun()
 
                 # --------------------------
                 # ENHANCEMENT EXPANDER
@@ -516,18 +556,22 @@ def render():
                     sharpness = st.slider("Sharpness", 0.0, 3.0, 1.0, 0.1)
                     
                     if st.button("✅ Apply Enhancements"):
-                        enhancer_bright = ImageEnhance.Brightness(edited_img)
-                        enhancer_contrast = ImageEnhance.Contrast(edited_img)
-                        enhancer_color = ImageEnhance.Color(edited_img)
-                        enhancer_sharp = ImageEnhance.Sharpness(edited_img)
+                        try:
+                            enhancer_bright = ImageEnhance.Brightness(edited_img)
+                            enhancer_contrast = ImageEnhance.Contrast(edited_img)
+                            enhancer_color = ImageEnhance.Color(edited_img)
+                            enhancer_sharp = ImageEnhance.Sharpness(edited_img)
 
-                        edited_img = enhancer_bright.enhance(brightness)
-                        edited_img = enhancer_contrast.enhance(contrast)
-                        edited_img = enhancer_color.enhance(saturation)
-                        edited_img = enhancer_sharp.enhance(sharpness)
-                        
-                        st.session_state["edited_image"] = edited_img
-                        st.rerun()
+                            edited_img = enhancer_bright.enhance(brightness)
+                            edited_img = enhancer_contrast.enhance(contrast)
+                            edited_img = enhancer_color.enhance(saturation)
+                            edited_img = enhancer_sharp.enhance(sharpness)
+                            
+                            st.session_state['imglab']["edited_image"] = edited_img
+                            st.session_state['imglab']['history'].append((f'Enhancements applied (B:{brightness}, C:{contrast}, S:{saturation}, Sh:{sharpness})', edited_img.copy()))
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Enhancement error: {e}")
 
                     # AI Enhancements
                     st.subheader("🤖 AI Enhancements")
@@ -536,14 +580,13 @@ def render():
                         if st.button("🪄 Remove Background"):
                             with st.spinner("Removing background (AI)..."):
                                 try:
-                                    # input_bytes = pil_to_bytes(edited_img).getvalue()
-                                    import io
                                     img_byte_arr = io.BytesIO()
                                     edited_img.save(img_byte_arr, format='PNG')
                                     input_bytes = img_byte_arr.getvalue()
                                     output_bytes = rembg.remove(input_bytes)
                                     edited_img = Image.open(io.BytesIO(output_bytes)).convert("RGB")
                                     st.session_state['imglab']["edited_image"] = edited_img
+                                    st.session_state['imglab']['history'].append(('Background removed (AI)', edited_img.copy()))
                                     st.success("✅ Background removed!")
                                     st.rerun()
                                 except Exception as e:
@@ -552,7 +595,6 @@ def render():
                         if st.button("📈 Super Resolution (AI)"):
                             with st.spinner("Upscaling (AI)..."):
                                 try:
-                                    # Simple upscale (replace with Real-ESRGAN for pro AI upscaling)
                                     width = edited_img.width * 2
                                     height = edited_img.height * 2
                                     edited_img = edited_img.resize(
@@ -560,6 +602,7 @@ def render():
                                         Image.Resampling.LANCZOS
                                     )
                                     st.session_state['imglab']["edited_image"] = edited_img
+                                    st.session_state['imglab']['history'].append((f'Image upscaled 2x (AI)', edited_img.copy()))
                                     st.success("✅ Image upscaled 2x!")
                                     st.rerun()
                                 except Exception as e:
@@ -569,16 +612,41 @@ def render():
                 # CREATIVE EFFECTS EXPANDER
                 # --------------------------
                 with st.expander("🎨 Creative Effects", expanded=False):
+                    # Fix: Define FilterEffect if not imported
+                    try:
+                        FilterEffect = getattr(__import__('src.core.image_lab', fromlist=['FilterEffect']), 'FilterEffect')
+                        apply_filter = getattr(__import__('src.core.image_lab', fromlist=['apply_filter']), 'apply_filter')
+                    except:
+                        # Fallback if image_lab not available
+                        from enum import Enum
+                        class FilterEffect(Enum):
+                            ORIGINAL = "Original"
+                            GRAYSCALE = "Grayscale"
+                            SEPIA = "Sepia"
+                        
+                        def apply_filter(img, effect):
+                            if effect == FilterEffect.GRAYSCALE:
+                                return img.convert("L").convert("RGB")
+                            elif effect == FilterEffect.SEPIA:
+                                sepia = img.convert("L")
+                                sepia = ImageOps.colorize(sepia, (200, 150, 100), (255, 240, 220))
+                                return sepia
+                            return img
+                    
                     selected_effect = st.selectbox(
                         "Select Effect",
                         [e.value for e in FilterEffect],
                         index=0
                     )
                     if st.button("✨ Apply Effect"):
-                        effect = FilterEffect(selected_effect)
-                        edited_img = apply_filter(edited_img, effect)
-                        st.session_state['imglab']["edited_image"] = edited_img
-                        st.rerun()
+                        try:
+                            effect = FilterEffect(selected_effect)
+                            edited_img = apply_filter(edited_img, effect)
+                            st.session_state['imglab']["edited_image"] = edited_img
+                            st.session_state['imglab']['history'].append((f'Creative effect: {selected_effect}', edited_img.copy()))
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Effect error: {e}")
                 # --------------------------
                 # DOWNLOAD EXPANDER
                 # --------------------------
@@ -588,14 +656,24 @@ def render():
                     download_format = st.selectbox("Format", ["PNG", "JPG", "WEBP", "SVG"])
                     download_quality = st.slider("Quality (JPG/WEBP)", 50, 100, 95)
                     
+                    # Fix: Define pil_to_bytes if not imported
+                    def pil_to_bytes(img, format="PNG", quality=95):
+                        buf = io.BytesIO()
+                        if format == "JPG":
+                            img.save(buf, format="JPEG", quality=quality)
+                        elif format == "WEBP":
+                            img.save(buf, format="WEBP", quality=quality)
+                        else:
+                            img.save(buf, format=format)
+                        buf.seek(0)
+                        return buf
+                    
                     # --------------------------
                     # HANDLE SVG (special case)
                     # --------------------------
                     if download_format == "SVG":
                         # For SVG: we export a simple SVG that embeds the image (works for any image)
                         def img_to_svg_bytes(img):
-                            import io
-                            import base64
                             buf = io.BytesIO()
                             img.save(buf, format="PNG")
                             b64 = base64.b64encode(buf.getvalue()).decode()
@@ -609,8 +687,8 @@ def render():
                         original_bytes = img_to_svg_bytes(original_img)
                     else:
                         # Normal image formats (PNG/JPG/WEBP)
-                        edited_bytes = pil_to_bytes(edited_img, format=download_format)
-                        original_bytes = pil_to_bytes(original_img, format=download_format)
+                        edited_bytes = pil_to_bytes(edited_img, format=download_format, quality=download_quality)
+                        original_bytes = pil_to_bytes(original_img, format=download_format, quality=download_quality)
                     
                     col_dl = st.columns(2)
                     with col_dl[0]:
@@ -632,22 +710,37 @@ def render():
             # PREVIEW SECTION (MAIN)
             # --------------------------
             with col2:
-                st.caption("Click & drag to select crop area (release to apply)")
-                if enable_cropper:
-                    edited_img = st_cropper(
-                        edited_img,
-                        realtime_update=True,    # SHOWS BOX WHILE DRAGGING
-                        box_color="#1f77b4",     # BLUE BOX
-                        aspect_ratio=aspect_ratio        # FREE CROP
-                    )
-
-                # Before/After comparison
                 st.subheader("🔍 Before / After")
                 col_comp = st.columns(2)
-                with col_comp[0]:
-                    st.image(original_img, caption="Original", width="stretch")
-                with col_comp[1]:
-                    st.image(edited_img, caption="Edited", width="stretch")
+                
+                # Fix: Safe cropper implementation
+                if enable_cropper:
+                    try:
+                        from streamlit_cropper import st_cropper
+                        st.caption("Click & drag to select crop area (release to apply)")
+                        with col_comp[0]:
+                            cropped_img = st_cropper(
+                                original_img,
+                                realtime_update=True,    
+                                box_color="#1f77b4",     
+                                aspect_ratio=aspect_ratio
+                            )
+                            st.session_state['imglab']['edited_image'] = cropped_img
+                            # st.image(original_img, caption="Original", width="stretch")
+                        with col_comp[1]:
+                            st.image(cropped_img, caption="Edited (Cropped)", width="stretch")
+                    except ImportError:
+                        st.error("⚠️ Install streamlit-cropper for crop functionality: `pip install streamlit-cropper`")
+                        with col_comp[0]:
+                            st.image(original_img, caption="Original", width="stretch")
+                        with col_comp[1]:
+                            st.image(edited_img, caption="Edited", width="stretch")
+                else: # No Crop
+                    # Before/After comparison
+                    with col_comp[0]:
+                        st.image(original_img, caption="Original", width="stretch")
+                    with col_comp[1]:
+                        st.image(edited_img, caption="Edited", width="stretch")
             # --------------------------
             # BATCH PROCESSING (BONUS)
             # --------------------------
@@ -664,16 +757,16 @@ def render():
             if batch_upload and st.button("🚀 Process Batch"):
                 with st.spinner("Processing batch..."):
                     batch_zip = io.BytesIO()
-                    from zipfile import ZipFile
                     
                     with ZipFile(batch_zip, "w") as zf:
                         for i, file in enumerate(batch_upload):
                             try:
                                 img = Image.open(file).convert("RGB")
                                 # Apply same edits as current image
-                                # (resize, filters, enhancements)
                                 img = img.resize((edited_img.width, edited_img.height), Image.Resampling.LANCZOS)
-                                img = apply_filter(img, FilterEffect(selected_effect))
+                                # Fix: Check if selected_effect exists before applying
+                                if selected_effect:
+                                    img = apply_filter(img, FilterEffect(selected_effect))
                                 
                                 # Save to zip
                                 img_bytes = pil_to_bytes(img)
@@ -694,10 +787,9 @@ def render():
             # RESET ALL
             # --------------------------
             if st.button("🗑️ Reset All Edits", type="primary"):
-                # st.session_state['imglab']["original_image"] = None
                 st.session_state['imglab']["edited_image"] = original_img.copy()
                 st.session_state['imglab']["crop_coords"] = (0, 0, 0, 0)
-                st.session_state['imglab']['history'] = []
+                st.session_state['imglab']['history'].append(('All edits reset', original_img.copy()))
                 st.success("✅ All edits reset!")
                 st.rerun()
         
@@ -705,22 +797,26 @@ def render():
     # 🧾 HISTORY
     # =========================================================
     with hist_tab:
+        df = st.session_state.get("data")  # Fix: Re-initialize df for history tab
         if df is not None:
             with st.expander(f"Dataset History", expanded=False):
                 for i, (change, df_state) in enumerate(st.session_state["history"][::-1]):
                     with st.expander(f"{i+1}. {change}", expanded=False):
                         st.dataframe(df_state.head(), width='stretch')
-                        st.rerun()
+        else:
+            st.warning("No Dataset Operation executed...")   
         
         imglab_hist = st.session_state['imglab'].get('history', None)
-        if imglab_hist is not None:
+        if imglab_hist and len(imglab_hist) > 0:
             with st.expander(f"Image Lab History", expanded=False):
                 for i, (change, img_state) in enumerate(st.session_state['imglab']["history"][::-1]):
                     cols = st.columns(2)
-                    with cols[0]: st.write(f"{i+1}. {change}");
-                    with cols[1]: st.image(img_state, caption="Edited", width=300);
-        if df is None and imglab_hist is None:
-            st.warning("No Operations executed yet...")   
+                    with cols[0]: 
+                        st.write(f"{i+1}. {change}")
+                    with cols[1]: 
+                        st.image(img_state, caption="Edited", width=300)
+        else:
+            st.warning("No Image Operation executed...")   
 
 
 if __name__ == "__main__":
