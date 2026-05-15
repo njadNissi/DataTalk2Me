@@ -13,7 +13,9 @@ import sys
 # --------------------------
 # AUTH FIRST
 # --------------------------
-st.set_page_config(layout="wide", page_title="Let data talk to Me.")
+st.set_page_config(layout="wide",
+                   page_title="Data-Talk2Me.",
+                   page_icon="data/logos/logo_orig.png")
 
 # 🔥 DEV MODE AUTO-DETECTION
 DEV_MODE = "--dev" in sys.argv # RUN as: reamlit run app.py -- --dev (-- → tells Streamlit: “all args after this are for MY app, not for Streamlit”)
@@ -43,7 +45,11 @@ if not st.session_state.logged_in:
 # --------------------------
 # APP STARTS HERE (AFTER LOGIN)
 # --------------------------
-st.sidebar.title("� Data Talk to Me")
+# Display logo in sidebar
+with st.sidebar:
+    st.image("data/logos/logo_nobg.png", width=200)  # Adjust width as needed
+    st.title("Data-Talk2Me")
+
 
 # --------------------------
 # SHOW USER INFO + USERNAME IN SIDEBAR
@@ -52,7 +58,6 @@ login.show_user_info()
 # --------------------------
 # ✅ LOGOUT BUTTON
 # --------------------------
-login.logout()
 st.sidebar.markdown("---")
 
 pages = [
@@ -92,3 +97,6 @@ st.sidebar.markdown('<span style="font-size: 11px;">Author:\nJoao Andre Ndombasi
 st.sidebar.markdown('<span style="font-size: 12px;">GitHub:\nhttps://github.com/njadNissi</span>', unsafe_allow_html=True)
 st.sidebar.markdown('<span style="font-size: 12px;">🔗:\nhttps://bwania-solution.netlify.app/</span>', unsafe_allow_html=True)
 st.sidebar.markdown('<span style="font-size: 12px;">📧:\nnjadnissi@gmail.com</span>', unsafe_allow_html=True)
+
+st.sidebar.markdown("---")
+login.logout()

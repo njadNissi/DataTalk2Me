@@ -93,21 +93,12 @@ def render():
 
     use_times = user_data.get("use_times", 1)
     prev_usage = user_data.get("usage_purpose", [])
-    print("Previous usage purposes:", prev_usage)
 
     # SHOW REVIEW ON FIRST LOGIN OR EVERY 10 LOGINS
     show_review = (use_times == 1 or use_times % 10 == 0)
     selected = []
 
-    btns = st.columns([5, 2, 3])
-    with btns[0]:
-        st.markdown("### 📝 Please select your usage purposes to help us suggest you better!")
-    with btns[1]:
-        if st.button("💾 Confirm and save your choices", type="primary"):
-            if not st.session_state.dev_mode:
-                update_user_purposes(user_data["email"], selected)
-                utils.temp_show("✅ Your choices updated successfully...", 'success', 1.0)
-
+    st.markdown("### 📝 Please select your usage purposes to help us suggest you better!")
     st.divider()
 
     COLS = 3
@@ -117,4 +108,11 @@ def render():
             checked = p in prev_usage
             if st.checkbox(p, value=checked):
                 selected.append(p)
-    print("Selected usage purposes:", selected)
+
+    st.divider()
+    center_bar = st.columns(5)
+    with center_bar[2]:
+        if st.button("💾 Confirm and save your choices", type="primary"):
+            if not st.session_state.dev_mode:
+                update_user_purposes(user_data["email"], selected)
+                utils.temp_show("✅ Your choices updated successfully...", 'success', 1.0)
