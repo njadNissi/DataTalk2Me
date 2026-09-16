@@ -11,6 +11,7 @@ import io
 from io import BytesIO
 import base64
 import zipfile
+import re
 
 # Suppress unnecessary warnings
 warnings.filterwarnings("ignore")
@@ -217,6 +218,333 @@ def render_2d_visualization(df):
         st.error(f"❌ Error: {str(e)}")
 
 
+def to_latex(eq):
+    return (
+        eq
+        .replace("np.sqrt", r"\sqrt")
+        .replace("np.sin", r"\sin")
+        .replace("np.cos", r"\cos")
+        .replace("np.tan", r"\tan")
+        .replace("np.exp", r"\exp")
+        .replace("np.log", r"\log")
+        .replace("**", "^")
+        .replace("*", r"\,")
+    )
+
+def plot_custom_function(
+    eq,
+    resolution=50,
+    x_range=(-5, 5),
+    y_range=(-5, 5),
+    x_value=0.0,
+    y_value=0.0,
+    surface_color="#636efa",
+    show_contours=True
+):
+    """
+    Plot a mathematical function as either:
+      - 3D surface: f(x, y)
+      - 2D curve:   f(x) or f(y)
+      - constant:   f()
+
+    Parameters
+    ----------
+    eq : str
+        Mathematical expression, e.g.:
+        "np.sin(np.sqrt(x**2 + y**2))"
+        "np.sin(x)"
+        "x**2 + 2*x"
+
+    resolution : int
+        Number of points used for plotting.
+
+    x_range : tuple
+        Range for x, e.g. (-5, 5).
+
+    y_range : tuple
+        Range for y, e.g. (-5, 5).
+
+    x_value : float
+        Constant x value when x is not used.
+
+    y_value : float
+        Constant y value when y is not used.
+
+    surface_color : str
+        Plot color.
+
+    show_contours : bool
+        Show contours on 3D surfaces.
+    """
+
+    # Roll back to python exponent symbol
+    eq = eq.replace('^', '**')
+    # Get latex eq
+    latex_eq = to_latex(eq)
+
+    # ---------------------------------------------------------
+    # Detect whether x and y are actually used
+    # ---------------------------------------------------------
+
+    variables = set(re.findall(r"\b[a-zA-Z_]\w*\b", eq))
+
+    has_x = "x" in variables
+    has_y = "y" in variables
+
+    # ---------------------------------------------------------
+    # Create coordinate arrays
+    # ---------------------------------------------------------
+
+    if has_x:
+        x = np.linspace(
+            x_range[0],
+            x_range[1],
+            resolution
+        )
+    else:
+        x = np.full(
+            resolution,
+            x_value,
+            dtype=float
+        )
+
+    if has_y:
+        y = np.linspace(
+            y_range[0],
+            y_range[1],
+            resolution
+        )
+    else:
+        y = np.full(
+            resolution,
+            y_value,
+            dtype=float
+        )
+
+    # ---------------------------------------------------------
+    # Safe evaluation environment
+    # ---------------------------------------------------------
+
+    env = {
+        "__builtins__": {},
+        "np": np,
+        "x": x,
+        "y": y,
+        "X": x,
+        "Y": y
+    }
+
+    # =========================================================
+    # 3D: f(x, y)
+    # =========================================================
+
+    if has_x and has_y:
+
+        X, Y = np.meshgrid(x, y)
+
+        try:
+            Z = eval(
+                eq,
+                {
+                    "__builtins__": {},
+                    "np": np,
+                    "x": X,
+                    "X": X,
+                    "y": Y,
+                    "Y": Y
+                }
+            )
+
+            Z = np.asarray(Z, dtype=float)
+
+        except Exception as e:
+            st.error(f"Could not evaluate `{eq}`: {e}")
+            return
+
+        fig = go.Figure()
+
+        contours = None
+
+        if show_contours:
+            contours = {
+                "z": {
+                    "show": True,
+                    "usecolormap": False,
+                    "color": "#333333",
+                    "width": 1,
+                    "project": {"z": True}
+                }
+            }
+
+        fig.add_trace(
+            go.Surface(
+                x=X,
+                y=Y,
+                z=Z,
+                colorscale=[
+                    [0, surface_color],
+                    [1, surface_color]
+                ],
+                showscale=False,
+                contours=contours
+            )
+        )
+
+        with st.container(border=True):
+            st.latex(f"f(x) = {latex_eq}")
+        
+        fig.update_layout(
+            title=f"f(x) = {latex_eq}",
+            scene=dict(
+                xaxis_title="X",
+                yaxis_title="Y",
+                zaxis_title="f(X, Y)"
+            ),
+            margin=dict(l=0, r=0, t=50, b=0)
+        )
+
+    # =========================================================
+    # 2D: f(x)
+    # =========================================================
+
+    elif has_x:
+
+        try:
+            Z = eval(
+                eq,
+                env
+            )
+
+            Z = np.asarray(Z, dtype=float)
+
+        except Exception as e:
+            st.error(f"Could not evaluate `{eq}`: {e}")
+            return
+
+        fig = go.Figure()
+
+        fig.add_trace(
+            go.Scatter(
+                x=x,
+                y=Z,
+                mode="lines",
+                line=dict(
+                    color=surface_color,
+                    width=3
+                )
+            )
+        )
+
+        with st.container(border=True):
+            st.latex(f"f(x) = {latex_eq}")
+
+        fig.update_layout(
+            title=f"f(x) = {latex_eq}",
+            xaxis_title="X",
+            yaxis_title="f(X)",
+            template="plotly_white"
+        )
+
+        fig.add_hline(
+            y=0,
+            line_color="gray",
+            line_width=1
+        )
+
+        fig.add_vline(
+            x=0,
+            line_color="gray",
+            line_width=1
+        )
+
+    # =========================================================
+    # 2D: f(y)
+    # =========================================================
+
+    elif has_y:
+
+        try:
+            Z = eval(
+                eq,
+                env
+            )
+
+            Z = np.asarray(Z, dtype=float)
+
+        except Exception as e:
+            st.error(f"Could not evaluate `{eq}`: {e}")
+            return
+
+        fig = go.Figure()
+
+        fig.add_trace(
+            go.Scatter(
+                x=y,
+                y=Z,
+                mode="lines",
+                line=dict(
+                    color=surface_color,
+                    width=3
+                )
+            )
+        )
+
+        with st.container(border=True):
+            st.latex(f"f(x) = {latex_eq}")
+
+        fig.update_layout(
+            title=f"f(y) = {latex_eq}",
+            xaxis_title="Y",
+            yaxis_title="f(Y)",
+            template="plotly_white"
+        )
+
+        fig.add_hline(
+            y=0,
+            line_color="gray",
+            line_width=1
+        )
+
+        fig.add_vline(
+            x=0,
+            line_color="gray",
+            line_width=1
+        )
+
+    # =========================================================
+    # Constant function
+    # =========================================================
+
+    else:
+
+        try:
+            value = eval(
+                eq,
+                env
+            )
+
+            fig = go.Figure(
+                go.Indicator(
+                    mode="number",
+                    value=float(value),
+                    title={"text": f"f = {latex_eq}"}
+                )
+            )
+
+        except Exception as e:
+            st.error(f"Could not evaluate `{eq}`: {e}")
+            return
+
+    # ---------------------------------------------------------
+    # Display
+    # ---------------------------------------------------------
+
+    st.plotly_chart(
+        fig,
+        use_container_width=True
+    )
+
+
 def render_3d_visualization(df, selected_data: str):
     """Enhanced 3D Visualization Component - FIXED: X vs MULTIPLE Y vs Z + No Duplicate Keys"""
     if selected_data != 'my function':
@@ -399,26 +727,39 @@ def render_3d_visualization(df, selected_data: str):
             st.error(f"❌ Error generating 3D plot: {str(e)}")
             st.exception(e)
     
-    else:
-        # Custom 3D Function Plotter (UNCHANGED)
+    else: # Custom 3D Function Plotter
         st.subheader("🎨 Custom 3D Function Plotter")
         
         example_functions = {
-            "Sphere": "np.sqrt(1 - (x**2 + y**2)/100)",
-            "Sine Wave": "np.sin(np.sqrt(x**2 + y**2))",
-            "Paraboloid": "x**2 + y**2",
-            "Cosine Product": "np.cos(x) * np.sin(y)"
+            "Sphere": "sqrt(1 - (x^2 + y^2)/100)",
+            "Sine Wave": "sin(sqrt(x^2 + y^2))",
+            "Paraboloid": "x^2 + y^2",
+            "Cosine Product": "cos(x) * sin(y)"
         }
         
         col1, col2 = st.columns([3, 1])
         with col1:
+            custom_3d_func = st.session_state.get("custom_3d_func", "sin(sqrt(x^2 + y^2))")
             func_input = st.text_area(
                 "Enter 3D function (z = f(x,y))",
-                value=st.session_state.get("custom_3d_func", "np.sin(np.sqrt(x**2 + y**2))"),
+                value=custom_3d_func.replace('np.', '').replace('**', '^'), # replace np. for user-friendliness
                 height=80,
                 help="Use numpy syntax (np = numpy, x/y = grid coordinates)",
                 key="custom_func_input"
             )
+            # Readd the np. prefix for evaluation
+            f = func_input.replace('sin', 'np.sin').replace('cos', 'np.cos').replace('tan', 'np.tan')
+            f = f.replace('sqrt', 'np.sqrt').replace('exp', 'np.exp').replace('log', 'np.log')
+            f = f.replace('abs', 'np.abs').replace('pow', 'np.power').replace('pi', 'np.pi')
+            f = f.replace('e', 'np.e').replace('arcsin', 'np.arcsin').replace('arccos', 'np.arccos')
+            f = f.replace('arctan', 'np.arctan').replace('log10', 'np.log10').replace('floor', 'np.floor')
+            f = f.replace('ceil', 'np.ceil').replace('round', 'np.round').replace('sign', 'np.sign').replace('sinh', 'np.sinh')
+            f = f.replace('cosh', 'np.cosh').replace('tanh', 'np.tanh').replace('arcsinh', 'np.arcsinh')
+            f = f.replace('arccosh', 'np.arccosh').replace('arctanh', 'np.arctanh').replace('log2', 'np.log2')
+            f = f.replace('expm1', 'np.expm1').replace('log1p', 'np.log1p').replace('isnan', 'np.isnan')
+            f = f.replace('isinf', 'np.isinf').replace('isfinite', 'np.isfinite').replace('clip', 'np.clip')
+            func_input = f.replace('max', 'np.maximum').replace('min', 'np.minimum').replace('where', 'np.where')
+
         with col2:
             st.markdown("### Examples")
             selected_example = st.selectbox("Quick Load", list(example_functions.keys()), key="func_example")
@@ -429,88 +770,92 @@ def render_3d_visualization(df, selected_data: str):
         st.session_state["custom_3d_func"] = func_input
 
         with st.expander("Advanced Settings", expanded=False):
+
             col1, col2, col3 = st.columns(3)
-            with col1:
-                x_range = st.slider("X range", -20.0, 20.0, (-5.0, 5.0), step=0.5, key="x_range")
-            with col2:
-                y_range = st.slider("Y range", -20.0, 20.0, (-5.0, 5.0), step=0.5, key="y_range")
+
+            eq = st.session_state.get(
+                "custom_3d_func",
+                "sin(sqrt(x^2 + y^2))"
+            )
+
+            # Detect variables
+            variables = set(re.findall(r"\b[a-zA-Z_]\w*\b", eq))
+
+            has_x = "x" in variables
+            has_y = "y" in variables
+
             with col3:
-                resolution = st.slider("Resolution", 20, 200, 50, key="resolution")
-            
-            surface_color = st.color_picker("Surface Base Color", "#636efa", key="surface_color")
-            show_contours = st.checkbox("Show Contours", True, key="show_contours")
-
-        x = np.linspace(x_range[0], x_range[1], resolution)
-        y = np.linspace(y_range[0], y_range[1], resolution)
-        X, Y = np.meshgrid(x, y)
-
-        try:
-            safe_env = {
-                "np": np,
-                "x": X,
-                "y": Y,
-                "X": X,
-                "Y": Y,
-                "sin": np.sin,
-                "cos": np.cos,
-                "tan": np.tan,
-                "sqrt": np.sqrt,
-                "exp": np.exp,
-                "log": np.log,
-                "abs": np.abs,
-                "pow": np.pow
-            }
-            
-            Z = eval(func_input, {"__builtins__": None}, safe_env)
-
-            if Z.shape != X.shape:
-                st.error("❌ Function output shape doesn't match grid dimensions!")
-                st.info(f"Expected shape: {X.shape}, Got: {Z.shape}")
-            else:
-                fig_func = go.Figure()
-                
-                surface_kwargs = {
-                    "z": Z,
-                    "x": X,
-                    "y": Y,
-                    "colorscale": [[0, surface_color], [1, px.colors.sequential.Viridis[-1]]],
-                    "opacity": 0.8,
-                    "name": "Function Surface"
-                }
-                
-                if show_contours:
-                    surface_kwargs["contours"] = {
-                        "z": {"show": True, "usecolormap": True, "highlightcolor": "white", "project_z": True}
-                    }
-                
-                fig_func.add_trace(go.Surface(**surface_kwargs))
-
-                fig_func.update_layout(
-                    title=f"3D Surface: z = {func_input}",
-                    scene=dict(
-                        xaxis_title="X",
-                        yaxis_title="Y",
-                        zaxis_title="Z",
-                        xaxis=dict(showgrid=True),
-                        yaxis=dict(showgrid=True),
-                        zaxis=dict(showgrid=True)
-                    ),
-                    height=700,
-                    template="plotly_white",
-                    hovermode="closest"
+                resolution = st.slider(
+                    "Resolution",
+                    20,
+                    200,
+                    50,
+                    key="resolution"
                 )
 
-                st.plotly_chart(fig_func, width='stretch')
+            with col1:
+                if has_x:
+                    x_range = st.slider(
+                        "X range",
+                        -20.0,
+                        20.0,
+                        (-5.0, 5.0),
+                        step=0.5,
+                        key="x_range"
+                    )
+                    x_value = 0.0
+                else:
+                    x_value = st.number_input(
+                        "Constant X Value",
+                        value=0.0,
+                        step=0.1,
+                        key="const_x"
+                    )
+                    x_range = (-5, 5)
 
-        except SyntaxError as e:
-            st.error(f"❌ Syntax Error: {str(e)}")
-            st.info("Check your numpy syntax (e.g., use np.sin() instead of sin())")
-        except NameError as e:
-            st.error(f"❌ Name Error: {str(e)}")
-            st.info("Only numpy functions (np.*) are allowed. Use np.sin(), np.cos(), etc.")
-        except Exception as e:
-            st.error(f"❌ Error evaluating function: {str(e)}")
-            st.info("Try a simpler function first: np.sin(np.sqrt(x**2 + y**2))")
+            with col2:
+                if has_y:
+                    y_range = st.slider(
+                        "Y range",
+                        -20.0,
+                        20.0,
+                        (-5.0, 5.0),
+                        step=0.5,
+                        key="y_range"
+                    )
+                    y_value = 0.0
+                else:
+                    y_value = st.number_input(
+                        "Constant Y Value",
+                        value=0.0,
+                        step=0.1,
+                        key="const_y"
+                    )
+                    y_range = (-5, 5)
+
+            surface_color = st.color_picker(
+                "Surface Base Color",
+                "#636efa",
+                key="surface_color"
+            )
+
+            show_contours = st.checkbox(
+                "Show Contours",
+                True,
+                key="show_contours"
+            )
+
+        plot_custom_function(
+            eq=eq,
+            resolution=resolution,
+            x_range=x_range,
+            y_range=y_range,
+            x_value=x_value,
+            y_value=y_value,
+            surface_color=surface_color,
+            show_contours=show_contours
+        )
+
 
 def render():
     """Main rendering function for data visualization page"""
