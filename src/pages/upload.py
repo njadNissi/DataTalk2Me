@@ -7,6 +7,7 @@ import ast
 from src.core.image_lab import * 
 import requests
 import io
+import hashlib
 from PIL import Image, ImageOps, ImageEnhance
 import rembg
 from zipfile import ZipFile
@@ -398,6 +399,8 @@ def render():
             st.session_state['imglab']["crop_coords"] = (0, 0, 0, 0)
         if "history" not in st.session_state['imglab']:
             st.session_state['imglab']["history"] = []
+        if st.session_state['imglab'].pop("reset_crop_aspect", False):
+            st.session_state["imglab_crop_aspect"] = "No crop"
         # --------------------------
         # UPLOAD SECTION
         # --------------------------
@@ -438,9 +441,13 @@ def render():
         # --------------------------
         if uploaded_image:
             try:
-                img = Image.open(uploaded_image).convert("RGB")
-                st.session_state['imglab']["original_image"] = img
-                st.session_state['imglab']["edited_image"] = img.copy()
+                upload_bytes = uploaded_image.getvalue()
+                upload_signature = hashlib.sha256(upload_bytes).hexdigest()
+                if upload_signature != st.session_state['imglab'].get("loaded_upload_signature"):
+                    img = Image.open(io.BytesIO(upload_bytes)).convert("RGB")
+                    st.session_state['imglab']["original_image"] = img
+                    st.session_state['imglab']["edited_image"] = img.copy()
+                    st.session_state['imglab']["loaded_upload_signature"] = upload_signature
             except Exception as e:
                 st.error(f"❌ Failed to load image: {e}")
 
@@ -464,13 +471,15 @@ def render():
                     # CROP TOOL
                     st.subheader("✂️ Crop")
                     st.caption("Click & drag on preview to select crop area")
+                    crop_aspect_options = ["No crop", "Free Crop", "1:1 (Square)", "4:3", "16:9", "9:16"]
+                    if "imglab_crop_aspect" not in st.session_state:
+                        st.session_state["imglab_crop_aspect"] = "No crop"
                     crop_aspect = st.selectbox(
-                        "Aspect Ratio", ["No crop", "Free Crop", "1:1 (Square)", "4:3", "16:9", "9:16"]
-                    )                # Convert selection to aspect ratio NUMBER
+                        "Aspect Ratio", crop_aspect_options, key="imglab_crop_aspect"
+                    )
+                    # Convert selection to aspect ratio NUMBER
                     aspect_ratio = None
-                    enable_cropper = True
-                    if crop_aspect == "No crop":
-                        enable_cropper = False
+                    enable_cropper = crop_aspect != "No crop"
                     if crop_aspect == "1:1 (Square)":
                         aspect_ratio = (1, 1)
                     elif crop_aspect == "4:3":
@@ -485,24 +494,6 @@ def render():
                     # Fix: Initialize selected_effect to avoid NameError in batch processing
                     selected_effect = None
                     
-                    if st.button("🖼️ Apply cropping"):
-                        try:
-                            # Fix: Use streamlit-cropper correctly (assuming st_cropper is installed)
-                            from streamlit_cropper import st_cropper
-                            cropped_img = st_cropper(
-                                original_img,
-                                realtime_update=False,
-                                box_color="#1f77b4",
-                                aspect_ratio=aspect_ratio
-                            )
-                            st.session_state['imglab']["edited_image"] = cropped_img
-                            st.session_state['imglab']['history'].append((f'Image cropped with aspect: {crop_aspect}', cropped_img.copy()))
-                            st.rerun()
-                        except ImportError:
-                            st.error("⚠️ Install streamlit-cropper first: `pip install streamlit-cropper`")
-                        except Exception as e:
-                            st.error(f"❌ Crop error: {e}")
-
                     # Resize
                     st.subheader("📏 Resize")
                     width = st.number_input("Width (px)", min_value=10, value=edited_img.width)
@@ -567,7 +558,7 @@ def render():
                             edited_img = enhancer_color.enhance(saturation)
                             edited_img = enhancer_sharp.enhance(sharpness)
                             
-                            st.session_state['imglab']["edited_image"] = edited_img
+                            st.session_state['imglab']["edited_image"] = edited_img.copy()
                             st.session_state['imglab']['history'].append((f'Enhancements applied (B:{brightness}, C:{contrast}, S:{saturation}, Sh:{sharpness})', edited_img.copy()))
                             st.rerun()
                         except Exception as e:
@@ -642,7 +633,7 @@ def render():
                         try:
                             effect = FilterEffect(selected_effect)
                             edited_img = apply_filter(edited_img, effect)
-                            st.session_state['imglab']["edited_image"] = edited_img
+                            st.session_state['imglab']["edited_image"] = edited_img.copy()
                             st.session_state['imglab']['history'].append((f'Creative effect: {selected_effect}', edited_img.copy()))
                             st.rerun()
                         except Exception as e:
@@ -713,22 +704,27 @@ def render():
                 st.subheader("🔍 Before / After")
                 col_comp = st.columns(2)
                 
-                # Fix: Safe cropper implementation
                 if enable_cropper:
                     try:
                         from streamlit_cropper import st_cropper
-                        st.caption("Click & drag to select crop area (release to apply)")
+                        st.caption("Select a crop area, preview it, then apply to keep the crop.")
                         with col_comp[0]:
                             cropped_img = st_cropper(
-                                original_img,
-                                realtime_update=True,    
-                                box_color="#1f77b4",     
+                                edited_img,
+                                realtime_update=True,
+                                box_color="#1f77b4",
                                 aspect_ratio=aspect_ratio
                             )
-                            st.session_state['imglab']['edited_image'] = cropped_img
-                            # st.image(original_img, caption="Original", width="stretch")
+                            st.image(original_img, caption="Original", width="stretch")
                         with col_comp[1]:
                             st.image(cropped_img, caption="Edited (Cropped)", width="stretch")
+                        if st.button("🖼️ Apply cropping", key="apply_image_crop"):
+                            st.session_state['imglab']["edited_image"] = cropped_img.copy()
+                            st.session_state['imglab']['history'].append(
+                                (f'Image cropped with aspect: {crop_aspect}', cropped_img.copy())
+                            )
+                            st.session_state['imglab']["reset_crop_aspect"] = True
+                            st.rerun()
                     except ImportError:
                         st.error("⚠️ Install streamlit-cropper for crop functionality: `pip install streamlit-cropper`")
                         with col_comp[0]:

@@ -1,4 +1,4 @@
-import numpy
+import numpy as np
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 import cv2
 import rembg
