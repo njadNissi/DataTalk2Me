@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>imu_data.csv Task & Scenarios</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-color: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent: #38bdf8;
+            --accent-glow: rgba(56, 189, 248, 0.2);
+            --border: #334155;
+            --highlight: #0284c7;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            margin: 0;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2.5rem;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 1.5rem;
+        }
+
+        h1 {
+            font-size: 2.25rem;
+            color: var(--accent);
+            margin-bottom: 0.5rem;
+            font-family: monospace;
+        }
+
+        p {
+            font-size: 1.1rem;
+            color: var(--text-muted);
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            margin-top: 2rem;
+            margin-bottom: 1.0rem;
+            border-left: 4px solid var(--accent);
+            padding-left: 0.75rem;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Styling for sensor waveform container */
+        .curve-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .scenario-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .data-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .data-table {
+            border-collapse: collapse;
+            text-align: center;
+            font-family: monospace;
+            font-size: 0.85rem;
+            width: 100%;
+        }
+
+        .data-table th, .data-table td {
+            border: 1px solid var(--border);
+            padding: 6px;
+            background-color: rgba(15, 23, 42, 0.6);
+        }
+
+        .data-table th {
+            background-color: var(--border);
+            color: var(--accent);
+        }
+
+        .data-table tr.highlight td {
+            background-color: var(--accent-glow);
+            color: var(--accent);
+            font-weight: bold;
+        }
+
+        .description {
+            font-size: 0.95rem;
+            color: var(--text-muted);
+            text-align: center;
+            margin-top: 0.5rem;
+        }
+
+        code {
+            background: #0f172a;
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>imu_data.csv</h1>
+        <p>The task is to process multi-axis inertial sensor telemetry tracking acceleration, angular velocity, and orientation.</p>
+    </header>
+
+    <div class="card">
+        <h2 class="section-title" style="margin-top:0;">Task Overview</h2>
+        <p>
+            Working with <code>imu_data.csv</code> involves parsing time-series sensor logs from an Inertial Measurement Unit (IMU):
+        </p>
+        <ul>
+            <li><strong>Accelerometer (<code>accX, accY, accZ</code>):</strong> Measures linear acceleration and gravitational forces across three spatial axes ($g$).</li>
+            <li><strong>Gyroscope (<code>gyroX, gyroY, gyroZ</code>):</strong> Measures rotational velocity and rate of change of orientation ($\text{deg/s}$).</li>
+            <li><strong>Orientation (<code>angleX</code>):</strong> Computed tilt or rotation angle along the primary axis.</li>
+        </ul>
+    </div>
+
+    <!-- Sensor Waveform Visualization -->
+    <h2 class="section-title">Telemetry Waveform Trend</h2>
+    <div class="card curve-container">
+        <!-- SVG multi-axis sensor representation -->
+        <svg width="340" height="200" viewBox="0 0 340 200" style="background-color: rgba(15, 23, 42, 0.6); border-radius: 8px; border: 1px solid var(--border);">
+            <!-- Axes grid -->
+            <line x1="30" y1="170" x2="320" y2="170" stroke="#334155" stroke-width="1" />
+            <line x1="30" y1="20" x2="30" y2="170" stroke="#334155" stroke-width="1" />
+            
+            <!-- Axis Labels -->
+            <text x="310" y="185" fill="#94a3b8" font-family="monospace" font-size="10">time</text>
+            <text x="10" y="25" fill="#94a3b8" font-family="monospace" font-size="10">val</text>
+
+            <!-- Simulated Telemetry Curves -->
+            <!-- accZ stable line -->
+            <path d="M 40 50 Q 100 48, 180 45 T 310 47" stroke="#38bdf8" stroke-width="2" fill="none" />
+            <!-- gyro wave -->
+            <path d="M 40 120 Q 100 90, 180 140 T 310 110" stroke="#f43f5e" stroke-width="2" fill="none" opacity="0.8" />
+        </svg>
+    </div>
+
+    <h2 class="section-title">Scenario Examples</h2>
+    
+    <div class="scenario-grid">
+        <!-- Scenario #1 -->
+        <div class="card data-container">
+            <h3>Scenario #1: Initial Reading</h3>
+            <table class="data-table">
+                <tr><th>accX</th><th>accY</th><th>accZ</th><th>angleX</th></tr>
+                <tr class="highlight"><td>0.3594</td><td>0.8203</td><td>1.6143</td><td>26.065</td></tr>
+            </table>
+            <div class="description">
+                <strong>Sample Index =</strong> Row 1
+            </div>
+        </div>
+
+        <!-- Scenario #2 -->
+        <div class="card data-container">
+            <h3>Scenario #2: Gyro Peak Shift</h3>
+            <table class="data-table">
+                <tr><th>accX</th><th>accY</th><th>accZ</th><th>angleX</th></tr>
+                <tr class="highlight"><td>0.3623</td><td>0.8184</td><td>1.6196</td><td>26.076</td></tr>
+            </table>
+            <div class="description">
+                <strong>Sample Index =</strong> Row 4
+            </div>
+        </div>
+
+        <!-- Scenario #3 -->
+        <div class="card data-container">
+            <h3>Scenario #3: Stabilization</h3>
+            <table class="data-table">
+                <tr><th>accX</th><th>accY</th><th>accZ</th><th>angleX</th></tr>
+                <tr class="highlight"><td>0.3447</td><td>0.8091</td><td>1.6177</td><td>26.071</td></tr>
+            </table>
+            <div class="description">
+                <strong>Sample Index =</strong> Row 8
+            </div>
+        </div>
+
+        <!-- Scenario #4 -->
+        <div class="card data-container">
+            <h3>Scenario #4: Steady State</h3>
+            <table class="data-table">
+                <tr><th>accX</th><th>accY</th><th>accZ</th><th>angleX</th></tr>
+                <tr class="highlight"><td>0.3608</td><td>0.8169</td><td>1.6157</td><td>26.093</td></tr>
+            </table>
+            <div class="description">
+                <strong>Sample Index =</strong> Row 11
+            </div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

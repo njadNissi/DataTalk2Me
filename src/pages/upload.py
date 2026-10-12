@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import numpy as np
 import os
@@ -96,15 +97,19 @@ def render():
         # Get all CSV files in data/ folder
         csv_files = [f for f in os.listdir("data") if f.endswith(".csv")]
         if csv_files:
-            cols = st.columns(len(csv_files))
+            cols = st.columns(len(csv_files) + 1) # extra for kaggle.com
             for i, file in enumerate(csv_files):
                 with cols[i]:
                     if st.button(f"📄 {file}"):
                         file_path = os.path.join("data", file)
+                        st.session_state["uploaded_file_name"] = file
                         df = pd.read_csv(file_path)
                         update_data(df)
                         st.session_state["history"] = [("Loaded Example Dataset: " + file, df.copy())]
                         st.rerun()  # refresh to show data
+            with cols[-1]:
+                st.link_button("📊 Download Datasets", "https://www.kaggle.com/datasets")
+
         else:
             st.info("No CSV files found in the /data folder.")
 
@@ -120,9 +125,18 @@ def render():
             st.session_state["history"] = [("Uploaded File", df.copy())]
 
         if df is not None:
+            # Load an html description if available from data/dataset_desc/xxx.html
+            description_file = f"data/desc/{st.session_state['uploaded_file_name'].replace('.csv', '.html')}"
+            if description_file and os.path.exists(description_file):
+                with open(description_file, "r") as f:
+                    html_content = f.read()
+                    components.html(html_content, height=500, scrolling=True)
+
+            # Display dataset info and sample in a container
+            st.subheader("Dataset Overview")
             st.caption(f"Rows: {len(df)} | Columns: {len(df.columns)} | Sample dataset")
             sample_df = dsp.get_representative_sample(df, target_col=None, sample_size=150)
-            st.dataframe(sample_df, height=600)
+            st.dataframe(sample_df, height=300)
 
             # RESET BUTTON
             if st.button("🗑️ Release file"):

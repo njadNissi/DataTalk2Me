@@ -116,3 +116,5 @@ def render():
             if not st.session_state.dev_mode:
                 update_user_purposes(user_data["email"], selected)
                 utils.temp_show("✅ Your choices updated successfully...", 'success', 1.0)
+
+                

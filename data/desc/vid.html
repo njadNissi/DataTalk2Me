@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>vid.csv Task & Scenarios</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-color: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent: #38bdf8;
+            --accent-glow: rgba(56, 189, 248, 0.2);
+            --border: #334155;
+            --highlight: #0284c7;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            margin: 0;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2.5rem;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 1.5rem;
+        }
+
+        h1 {
+            font-size: 2.25rem;
+            color: var(--accent);
+            margin-bottom: 0.5rem;
+            font-family: monospace;
+        }
+
+        p {
+            font-size: 1.1rem;
+            color: var(--text-muted);
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            margin-top: 2rem;
+            margin-bottom: 1.0rem;
+            border-left: 4px solid var(--accent);
+            padding-left: 0.75rem;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Styling for waveform trend container */
+        .curve-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .scenario-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .data-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .data-table {
+            border-collapse: collapse;
+            text-align: center;
+            font-family: monospace;
+            font-size: 0.9rem;
+            width: 100%;
+        }
+
+        .data-table th, .data-table td {
+            border: 1px solid var(--border);
+            padding: 6px;
+            background-color: rgba(15, 23, 42, 0.6);
+        }
+
+        .data-table th {
+            background-color: var(--border);
+            color: var(--accent);
+        }
+
+        .data-table tr.highlight td {
+            background-color: var(--accent-glow);
+            color: var(--accent);
+            font-weight: bold;
+        }
+
+        .description {
+            font-size: 0.95rem;
+            color: var(--text-muted);
+            text-align: center;
+            margin-top: 0.5rem;
+        }
+
+        code {
+            background: #0f172a;
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>vid.csv</h1>
+        <p>The task is to track sequential temporal data points with core values alongside upper (increaser) and lower (decreaser) boundaries.</p>
+    </header>
+
+    <div class="card">
+        <h2 class="section-title" style="margin-top:0;">Task Overview</h2>
+        <p>
+            Working with <code>vid.csv</code> involves parsing progressive time-series telemetry or video tracking logs containing:
+        </p>
+        <ul>
+            <li><strong>Time (<code>time</code>):</strong> Sequential frame index or timestamp.</li>
+            <li><strong>Value (<code>val</code>):</strong> Primary measurement or tracking coordinate increasing steadily toward zero.</li>
+            <li><strong>Bounds (<code>increaser</code> / <code>decreaser</code>):</strong> Dynamic upper and lower tolerance limits or variance thresholds associated with each step.</li>
+        </ul>
+    </div>
+
+    <!-- Trend Visualization -->
+    <h2 class="section-title">Temporal Progression Trend</h2>
+    <div class="card curve-container">
+        <!-- SVG wave representation tracking gradual ascent -->
+        <svg width="340" height="200" viewBox="0 0 340 200" style="background-color: rgba(15, 23, 42, 0.6); border-radius: 8px; border: 1px solid var(--border);">
+            <!-- Axes -->
+            <line x1="30" y1="170" x2="320" y2="170" stroke="#334155" stroke-width="1" />
+            <line x1="30" y1="20" x2="30" y2="170" stroke="#334155" stroke-width="1" />
+            
+            <!-- Axis Labels -->
+            <text x="310" y="185" fill="#94a3b8" font-family="monospace" font-size="10">time</text>
+            <text x="10" y="25" fill="#94a3b8" font-family="monospace" font-size="10">val</text>
+
+            <!-- Rising linear trajectory curve -->
+            <path d="M 40 150 Q 150 100, 310 40" stroke="#38bdf8" stroke-width="3" fill="none" stroke-linecap="round" />
+        </svg>
+    </div>
+
+    <h2 class="section-title">Scenario Examples</h2>
+    
+    <div class="scenario-grid">
+        <!-- Scenario #1 -->
+        <div class="card data-container">
+            <h3>Scenario #1: Initial Frame</h3>
+            <table class="data-table">
+                <tr><th>time</th><th>val</th><th>inc</th><th>dec</th></tr>
+                <tr class="highlight"><td>0</td><td>-50</td><td>-42</td><td>-58</td></tr>
+            </table>
+            <div class="description">
+                <strong>Progress =</strong> Start (t=0)
+            </div>
+        </div>
+
+        <!-- Scenario #2 -->
+        <div class="card data-container">
+            <h3>Scenario #2: Midpoint Progress</h3>
+            <table class="data-table">
+                <tr><th>time</th><th>val</th><th>inc</th><th>dec</th></tr>
+                <tr class="highlight"><td>25</td><td>-25</td><td>-18</td><td>-31</td></tr>
+            </table>
+            <div class="description">
+                <strong>Progress =</strong> Transition (t=25)
+            </div>
+        </div>
+
+        <!-- Scenario #3 -->
+        <div class="card data-container">
+            <h3>Scenario #3: Zero Approach</h3>
+            <table class="data-table">
+                <tr><th>time</th><th>val</th><th>inc</th><th>dec</th></tr>
+                <tr class="highlight"><td>40</td><td>-10</td><td>0</td><td>-20</td></tr>
+            </table>
+            <div class="description">
+                <strong>Progress =</strong> Convergence (t=40)
+            </div>
+        </div>
+
+        <!-- Scenario #4 -->
+        <div class="card data-container">
+            <h3>Scenario #4: Final Frame</h3>
+            <table class="data-table">
+                <tr><th>time</th><th>val</th><th>inc</th><th>dec</th></tr>
+                <tr class="highlight"><td>49</td><td>-1</td><td>1</td><td>-3</td></tr>
+            </table>
+            <div class="description">
+                <strong>Progress =</strong> End (t=49)
+            </div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>
