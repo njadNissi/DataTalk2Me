@@ -1,5 +1,5 @@
 import streamlit as st
-from src.core.auth import get_total_users, login_user, register_user, update_user_purposes, _DB, is_email_real
+from src.core.auth import login_user, register_user, update_user_purposes, _DB, is_email_real
 
 # ------------------------------
 # SESSION STATE

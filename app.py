@@ -6,7 +6,7 @@ import streamlit as st
 st.set_page_config(page_title="Talk2Me", layout="wide")
 from src.pages import (
     upload, data_plotting, inference, login,
-    preprocessing, feature_eng_analysis,usage_review
+    preprocessing, feature_eng_analysis,settings,chat
 )
 import sys
 
@@ -33,6 +33,10 @@ if DEV_MODE:
         "last_use": "2025-01-01",
         "usage_purpose": ["Development"]
     }
+    st.session_state.active_users = [
+        {'user_name': 'Anjie 安杰', 'email': '3507497566@qq.com', 'last_use': '2026-10-14', 'usage_purpose': ['🐍 Python programming learning']},
+        {'user_name': 'Njad Nissi', 'email': 'njadnissi@gmail.com', 'last_use': '2026-10-14', 'usage_purpose': ['🧪 Coding exercises & challenges', '📝 Pseudocode & logic design']}
+    ]
 # ===============================================================================
 
 login.init_auth()
@@ -66,7 +70,8 @@ pages = [
     "Data Plotting",
     "Preprocessing",
     "Inference",
-    "Usage Review"
+    "Settings",
+    "Chat"
 ]
 
 if "page" not in st.session_state:
@@ -89,8 +94,10 @@ elif page == "Preprocessing":
     preprocessing.render()
 elif page == "Inference":
     inference.render()
-elif page == "Usage Review":
-    usage_review.render()
+elif page == "Settings":
+    settings.render()
+elif page == "Chat":
+    chat.render()
 
 st.sidebar.markdown("---")
 st.sidebar.markdown('<span style="font-size: 11px;">Author:\nJoao Andre Ndombasi *Diakusala*</span>', unsafe_allow_html=True)

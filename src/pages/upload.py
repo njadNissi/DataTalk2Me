@@ -125,12 +125,15 @@ def render():
             st.session_state["history"] = [("Uploaded File", df.copy())]
 
         if df is not None:
-            # Load an html description if available from data/dataset_desc/xxx.html
-            description_file = f"data/desc/{st.session_state['uploaded_file_name'].replace('.csv', '.html')}"
-            if description_file and os.path.exists(description_file):
-                with open(description_file, "r") as f:
-                    html_content = f.read()
-                    components.html(html_content, height=500, scrolling=True)
+            try: # If it is a sample dataset.
+                # Load an html description if available from data/dataset_desc/xxx.html
+                description_file = f"data/desc/{st.session_state['uploaded_file_name'].replace('.csv', '.html')}"
+                if description_file and os.path.exists(description_file):
+                    with open(description_file, "r") as f:
+                        html_content = f.read()
+                        components.html(html_content, height=500, scrolling=True)
+            except:
+                pass # It is not a sample dataset
 
             # Display dataset info and sample in a container
             st.subheader("Dataset Overview")

@@ -144,21 +144,29 @@ def render():
         
         with col1:
             # File upload for precomputed results
+            # File upload for precomputed results
             uploaded_file = st.file_uploader(
                 "📤 Load Precomputed Analysis (.pkl)",
                 type=["pkl"],
+                key="fe_pkl_uploader",
                 help="Upload a saved analysis results file to view without re-running"
             )
             
             if uploaded_file is not None:
-                with st.spinner("Loading analysis results..."):
-                    try:
-                        loaded_results = pickle.load(uploaded_file)
-                        st.session_state['feature_analysis']["analysis_results"] = loaded_results
-                        utils.temp_show("✅ Analysis loaded successfully!", 'success', 2.0)
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"❌ Failed to load file: {str(e)}")
+                # Create a unique identifier for the uploaded file
+                file_id = f"{uploaded_file.name}_{uploaded_file.size}"
+                
+                # Only process if it hasn't already been loaded in this session
+                if st.session_state['feature_analysis'].get("last_uploaded_file_id") != file_id:
+                    with st.spinner("Loading analysis results..."):
+                        try:
+                            loaded_results = pickle.load(uploaded_file)
+                            st.session_state['feature_analysis']["analysis_results"] = loaded_results
+                            st.session_state['feature_analysis']["last_uploaded_file_id"] = file_id
+                            utils.temp_show("✅ Analysis loaded successfully!", 'success', 2.0)
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Failed to load file: {str(e)}") 
         
         with col2:
             # Clear results button
