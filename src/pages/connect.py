@@ -138,80 +138,76 @@ def unpack_and_apply_cadeau(file_bytes):
 
 def handle_file_attachment(msg, is_me=False):
     if msg.get("file_name"):
-        if msg.get("file_expired") or not msg.get("file_bytes"):
-            align_style = "text-align: right;" if is_me else "text-align: left;"
-            st.markdown(f"<div style='{align_style}'><span style='font-size: 0.85em; color: gray;'>⌛ Attachment ({msg.get('file_name')}) has expired (> 7 weeks).</span></div>", unsafe_allow_html=True)
-        else:
-            f_name = msg.get("file_name")
-            try:
-                raw_bytes = base64.b64decode(msg.get("file_bytes"))
-                
-                # Automatically decompress (supports both compressed and legacy files)
+        with st.container(border=True):
+            if msg.get("file_expired") or not msg.get("file_bytes"):
+                align_style = "text-align: right;" if is_me else "text-align: left;"
+                st.markdown(f"<div style='{align_style}'><span style='font-size: 0.85em; color: gray;'>⌛ Attachment ({msg.get('file_name')}) has expired (> 7 weeks).</span></div>", unsafe_allow_html=True)
+            else:
+                f_name = msg.get("file_name")
                 try:
-                    f_bytes = gzip.decompress(raw_bytes)
-                except Exception:
-                    f_bytes = raw_bytes  
-                
-                # Inject CSS to remove vertical padding/margins for buttons inside attachments
-                st.markdown(
-                    """
-                    <style>
-                    div[data-testid="column"] {
-                        padding: 0px !important;
-                        margin: 0px !important;
-                    }
-                    .stButton button, .stDownloadButton button {
-                        min-height: 32px !important;
-                        height: 32px !important;
-                        padding-top: 0px !important;
-                        padding-bottom: 0px !important;
-                        margin-top: 2px !important;
-                    }
-                    </style>
-                    """,
-                    unsafe_allow_html=True
-                )
-
-                # Use gap="collapsed" to remove horizontal spacing between columns
-                if is_me:
-                    col_spacer, col_action, col_open, col_dl = st.columns([1.5, 2.2, 0.8, 0.8], gap="none")
-                else:
-                    col_action, col_open, col_dl, col_spacer = st.columns([2.2, 0.8, 0.8, 1.5], gap="none")
-                
-                with col_action:
-                    msg_id = msg.get('id')
-                    is_read = msg.get('read', False)
-
-                    # Show a noticeable visual tag if it's already open/read
-                    if is_read:
-                        st.markdown("<div style='padding-top: 6px;'>🎁 **Cadeau** — <span style='color: #28a745; font-weight: bold;'>✅ Opened</span></div>", unsafe_allow_html=True)
-                    else:
-                        st.markdown("<div style='padding-top: 6px;'>🎁 **Cadeau** — <span style='color: #ffc107; font-weight: bold;'>📦 Closed</span></div>", unsafe_allow_html=True)
-                with col_open:
-                    if st.button("👁️", key=f"open_cadeau_{msg_id}", help="Unpack and setup entire environment workspace"):
-                        success, message = unpack_and_apply_cadeau(f_bytes)
-                        if success:
-                            # 1. Update Firestore backend
-                            mark_message_as_read(msg_id)
-                            
-                            # 2. Update local session state immediately so it reflects without refetching
-                            msg['read'] = True
-                            
-                            st.success(message)
-                            st.rerun()
-                        else:
-                            st.error(message)
-                with col_dl:
-                    st.download_button(
-                        label="📥",
-                        data=f_bytes,
-                        file_name=f_name,
-                        mime="application/octet-stream",
-                        help=f"Download {f_name}", # This shows the full filename on mouse hover!
-                        key=f"dl_chat_file_{msg.get('id', f_name)}"
+                    raw_bytes = base64.b64decode(msg.get("file_bytes"))
+                    
+                    # Automatically decompress (supports both compressed and legacy files)
+                    try:
+                        f_bytes = gzip.decompress(raw_bytes)
+                    except Exception:
+                        f_bytes = raw_bytes  
+                    
+                    # Inject CSS to remove vertical padding/margins for buttons inside attachments
+                    st.markdown(
+                        """
+                        <style>
+                        div[data-testid="column"] {
+                            padding: 0px !important;
+                            margin: 0px !important;
+                        }
+                        .stButton button, .stDownloadButton button {
+                            min-height: 32px !important;
+                            height: 32px !important;
+                            padding-top: 0px !important;
+                            padding-bottom: 0px !important;
+                            margin-top: 2px !important;
+                        }
+                        </style>
+                        """,
+                        unsafe_allow_html=True
                     )
-            except Exception as ex:
-                st.error(f"⚠️ Could not load attachment: {ex}")
+
+                    col_action, col_open, col_dl = st.columns([7, 1.5, 1.5], gap="small")
+                    with col_action:
+                        msg_id = msg.get('id')
+                        is_read = msg.get('read', False)
+
+                        # Show a noticeable visual tag if it's already open/read
+                        if is_read:
+                            st.markdown("<div style='padding-top: 6px;'>🎁 **Cadeau** — <span style='color: #28a745; font-weight: bold;'>✅ Opened</span></div>", unsafe_allow_html=True)
+                        else:
+                            st.markdown("<div style='padding-top: 6px;'>🎁 **Cadeau** — <span style='color: #ffc107; font-weight: bold;'>📦 Closed</span></div>", unsafe_allow_html=True)
+                    with col_open:
+                        if st.button("👁️", key=f"open_cadeau_{msg_id}", help="Unpack and setup entire environment workspace"):
+                            success, message = unpack_and_apply_cadeau(f_bytes)
+                            if success:
+                                # 1. Update Firestore backend
+                                mark_message_as_read(msg_id)
+                                
+                                # 2. Update local session state immediately so it reflects without refetching
+                                msg['read'] = True
+                                
+                                # st.success(message)
+                                st.rerun()
+                            else:
+                                st.error(message)
+                    with col_dl:
+                        st.download_button(
+                            label="📥",
+                            data=f_bytes,
+                            file_name=f_name,
+                            mime="application/octet-stream",
+                            help=f"Download {f_name}", # This shows the full filename on mouse hover!
+                            key=f"dl_chat_file_{msg.get('id', f_name)}"
+                        )
+                except Exception as ex:
+                    st.error(f"⚠️ Could not load attachment: {ex}")
                           
 @st.fragment(run_every=60)
 def render_live_messages(current_user, recipient, session_messages_key):
@@ -240,7 +236,9 @@ def render_live_messages(current_user, recipient, session_messages_key):
                         """,
                         unsafe_allow_html=True
                     )
-                    handle_file_attachment(msg)
+                    _, right_col = st.columns([3, 1])
+                    with right_col:
+                        handle_file_attachment(msg)
                 else:
                     # Push the inline-block bubble to the left
                     st.markdown(
@@ -254,7 +252,9 @@ def render_live_messages(current_user, recipient, session_messages_key):
                         """,
                         unsafe_allow_html=True
                     )
-                    handle_file_attachment(msg, is_me=False) 
+                    left_col, _ = st.columns([1, 3])
+                    with left_col:
+                        handle_file_attachment(msg)
 
 def render():
     # Create a two-column layout: Left for the chat, Right for the clickable user list
@@ -273,7 +273,7 @@ def render():
             # Header with a close/back button for the current chat
             head_col1, head_col2, head_col3 = st.columns([4, 1, 1])
             with head_col1:
-                st.markdown(f"### 💬 Chat with {recipient['user_name']}")
+                st.markdown(f"### 💬 Connect with {recipient['user_name']}")
 
             with head_col2:
                 if st.button("🔄 Refresh", key=f"refresh_chat_{chat_partner_email}", help="Fetch latest messages from Firestore"):
@@ -351,7 +351,7 @@ def render():
             
         else:
             # Empty state when no chat is selected
-            st.markdown("### 💬 Messaging Hub")
+            st.markdown("### 💬 Connecting with Gigs")
             st.info("👈 Select an active developer from the right-hand panel to open a chat and start messaging.")
 
     # --- RIGHT COLUMN: CLICKABLE ACTIVE USERS LIST ---

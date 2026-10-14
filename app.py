@@ -6,7 +6,7 @@ import streamlit as st
 st.set_page_config(page_title="Talk2Me", layout="wide")
 from src.pages import (
     upload, data_plotting, inference, login,
-    preprocessing, feature_eng_analysis,settings,chat
+    preprocessing, feature_eng_analysis,settings,connect
 )
 import sys
 
@@ -71,7 +71,7 @@ pages = [
     "Preprocessing",
     "Inference",
     "Settings",
-    "Chat"
+    "Connect"
 ]
 
 if "page" not in st.session_state:
@@ -96,8 +96,8 @@ elif page == "Inference":
     inference.render()
 elif page == "Settings":
     settings.render()
-elif page == "Chat":
-    chat.render()
+elif page == "Connect":
+    connect.render()
 
 st.sidebar.markdown("---")
 st.sidebar.markdown('<span style="font-size: 11px;">Author:\nJoao Andre Ndombasi *Diakusala*</span>', unsafe_allow_html=True)
