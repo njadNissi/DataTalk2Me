@@ -417,3 +417,60 @@ def mark_message_as_read(message_id):
     except Exception as e:
         print(f"> Mark message read error: {str(e)}")
         return False
+
+        
+
+# ====================== C H A L L E N G E S ====================
+
+def _get_challenges_ref():
+    init_firestore()
+    if _DB is not None:
+        return _DB.collection("DATA-TALK2ME.CHALLENGES")
+    return None
+
+def db_create_challenge(challenge_data):
+    ref = _get_challenges_ref()
+    if not ref:
+        # Offline fallback to session state
+        if "challenges" not in st.session_state:
+            st.session_state["challenges"] = []
+        st.session_state["challenges"].append(challenge_data)
+        return True
+    try:
+        ref.document(challenge_data["id"]).set(challenge_data)
+        return True
+    except Exception as e:
+        st.error(f"Error creating challenge in Firestore: {e}")
+        return False
+
+
+@st.cache_data(ttl=60)
+def db_get_challenges():
+    ref = _get_challenges_ref()
+    if not ref:
+        return st.session_state.get("challenges", [])
+    try:
+        challenges = []
+        for doc in ref.stream():
+            data = doc.to_dict()
+            # Convert timestamp back if needed
+            challenges.append(data)
+        return challenges
+    except Exception as e:
+        print(f"Error fetching challenges: {e}")
+        return []
+
+def db_update_challenge(challenge_id, update_dict):
+    ref = _get_challenges_ref()
+    if not ref:
+        challenges = st.session_state.get("challenges", [])
+        for c in challenges:
+            if c["id"] == challenge_id:
+                c.update(update_dict)
+        return True
+    try:
+        ref.document(challenge_id).update(update_dict)
+        return True
+    except Exception as e:
+        st.error(f"Error updating challenge: {e}")
+        return False
