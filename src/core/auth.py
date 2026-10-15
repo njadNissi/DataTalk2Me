@@ -294,7 +294,83 @@ def get_active_users():
         print(f"> Get active users error: {str(e)}")
         return []
 
+# Get all users (cached for optimization)
+@st.cache_data(ttl=60)
+def get_all_users():
+    init_firestore()
+    if not _USERS_REF:
+        return []
+
+    try:
+        all_users = []
+        for user_doc in _USERS_REF.stream():
+            user_data = user_doc.to_dict()
+            all_users.append({
+                "user_name": user_data.get("user_name", "N/A"),
+                "email": user_data.get("email", "N/A"),
+                "last_use": user_data.get("last_use", "N/A"),
+                "usage_purpose": user_data.get("usage_purpose", []),
+                "is_visible": user_data.get("is_visible", True)
+            })
+        return all_users
+    except Exception as e:
+        print(f"> Get all users error: {str(e)}")
+        return []
+          
+@st.cache_data(ttl=60)
+def get_recent_contacts(user_email, limit=5):
+    """Retrieves a list of unique users recently contacted by the current user."""
+    init_firestore()
+    if not _MESSAGES_REF:
+        return []
+
+    try:
+        # Query messages sent by or received by the user
+        sent_query = _MESSAGES_REF.where("sender_email", "==", user_email).stream()
+        recv_query = _MESSAGES_REF.where("recipient_email", "==", user_email).stream()
         
+        interaction_map = {} # email -> latest timestamp
+
+        def process_stream(stream, is_sender):
+            for doc in stream:
+                data = doc.to_dict()
+                timestamp = data.get("timestamp")
+                
+                # Determine the *other* person's details
+                other_email = data.get("recipient_email") if is_sender else data.get("sender_email")
+                other_name = data.get("recipient_name") if is_sender else data.get("sender_name")
+                
+                if other_email == user_email:
+                    continue
+                
+                if other_email not in interaction_map or (timestamp and timestamp > interaction_map[other_email]["timestamp"]):
+                    interaction_map[other_email] = {
+                        "email": other_email,
+                        "user_name": other_name or other_email,
+                        "timestamp": timestamp
+                    }
+
+        process_stream(sent_query, True)
+        process_stream(recv_query, False)
+
+        # Sort by most recent timestamp
+        sorted_contacts = sorted(
+            interaction_map.values(), 
+            key=lambda x: x.get("timestamp") or 0, 
+            reverse=True
+        )
+
+        # Return just the user objects up to the limit
+        return [{
+            "email": c["email"],
+            "user_name": c["user_name"],
+            "usage_purpose": [] # Can be populated if needed
+        } for c in sorted_contacts[:limit]]
+
+    except Exception as e:
+        print(f"> Get recent contacts error: {str(e)}")
+        return []
+    
 # ===================== MESSAGES =====================
 
 def init_messages_ref():

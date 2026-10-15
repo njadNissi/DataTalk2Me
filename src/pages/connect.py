@@ -4,7 +4,10 @@ import pickle
 import io
 import pandas as pd
 import gzip
-from src.core.auth import get_active_users, get_conversation_history, send_message, mark_message_as_read
+from src.core.auth import (
+    get_all_users, get_active_users, get_conversation_history, get_recent_contacts,
+    send_message, mark_message_as_read
+)
 
 def clear_input():
     # Modifying state inside a callback runs BEFORE widgets instantiate in the next rerun
@@ -312,7 +315,8 @@ def render():
 
             # Horizontally Scrolling Emoji Bar
             with cols[1]:
-                set_emoji_bar()
+                # set_emoji_bar()
+                pass
 
             # ------------------------------
             # Chat Input Box at the bottom
@@ -353,44 +357,68 @@ def render():
             # Empty state when no chat is selected
             st.markdown("### 💬 Connecting with Gigs")
             st.info("👈 Select an active developer from the right-hand panel to open a chat and start messaging.")
-
     # --- RIGHT COLUMN: CLICKABLE ACTIVE USERS LIST ---
     with users_col:
         st.markdown("### 👥 Developers")
         
-        # Use session state to handle live text changes seamlessly
         if "dev_search_input" not in st.session_state:
             st.session_state["dev_search_input"] = ""
 
-        search_query = st.text_input(
-            "Search developers", 
-            placeholder="Search by name, email, skill...", 
-            label_visibility="collapsed", 
-            key="dev_search_input"
-        )
+        search_col, toggle_col = st.columns([3, 1], gap="small")
         
+        with search_col:
+            search_query = st.text_input(
+                "Search developers", 
+                placeholder="Search by name, email, skill...", 
+                label_visibility="collapsed", 
+                key="dev_search_input"
+            )
+            
+        with toggle_col:
+            active_only_toggle = st.toggle("🟢", value=True, key="dev_active_only_toggle", help="Active users only")
+
         st.divider()
 
-        active_users = []
+        developers_pool = []
 
         if st.session_state.get("dev_mode", False):
-            active_users = st.session_state.get("active_users", [])
+            if active_only_toggle:
+                developers_pool = st.session_state.get("active_users", [])
+            else:
+                developers_pool = st.session_state.get("all_users", st.session_state.get("active_users", []))
         else:
-            # Cache the base user list so filtering is instantaneous
-            @st.cache_data(ttl=300)
-            def cached_get_active_users():
-                return get_active_users()
-                
-            active_users = cached_get_active_users()
+            if active_only_toggle:
+                @st.cache_data(ttl=300)
+                def cached_get_active_users():
+                    return get_active_users()
+                developers_pool = cached_get_active_users()
+            else:
+                @st.cache_data(ttl=300)
+                def cached_get_all_users():
+                    return get_all_users()
+                developers_pool = cached_get_all_users()
 
-        # Filter live using the session state value
-        current_query = st.session_state.get("dev_search_input", "")
+        current_query = st.session_state.get("dev_search_input", "").strip()
 
-        if current_query and len(current_query.strip()) >= 2:
+        current_query = st.session_state.get("dev_search_input", "").strip()
+
+        # Determine which users to display
+        if not current_query or len(current_query) < 2:
+            # NO SEARCH QUERY: Show your true recently contacted developers!
+            display_users = get_recent_contacts(current_user['email'], limit=5)
+            
+            # Fallback to active pool if you haven't chatted with anyone yet
+            if not display_users:
+                display_users = developers_pool[:5]
+                list_title_caption = "🟢 Active Developers:"
+            else:
+                list_title_caption = "💬 Recently Contacted:"
+        else:
+            # WITH SEARCH QUERY: Filter by name, email, or skill tags
             query_lower = current_query.lower()
             filtered_users = []
             
-            for u in active_users:
+            for u in developers_pool:
                 u_name = u.get('user_name', '').lower()
                 u_email = u.get('email', '').lower()
                 
@@ -404,25 +432,20 @@ def render():
                     
                 combined_tags = [str(p).lower() for p in (purposes + skills)]
                 
-                match_name = query_lower in u_name
-                match_email = query_lower in u_email
-                match_tag = any(query_lower in tag for tag in combined_tags)
-                
-                if match_name or match_email or match_tag:
+                if query_lower in u_name or query_lower in u_email or any(query_lower in tag for tag in combined_tags):
                     filtered_users.append(u)
                     
-            active_users = filtered_users
-        elif current_query and len(current_query.strip()) < 2:
-            active_users = []
+            display_users = filtered_users
+            list_title_caption = f"🔍 Search Results ({len(display_users)}):"
 
         with st.container(height=600):
-            if not current_query or len(current_query.strip()) < 2:
-                st.info("🔍 Type a name, email, or skill above to search developers.")
-            elif not active_users:
-                st.caption("No matching developers found.")
+            if not display_users:
+                st.caption("No developers found.")
             else:
+                st.markdown(f"<div style='font-size: 0.8rem; color: #94a3b8; margin-bottom: 6px;'>{list_title_caption}</div>", unsafe_allow_html=True)
+                
                 active_users_bar(
-                    active_users, 
+                    display_users, 
                     current_user['email'],
                     st.session_state.get("active_chat_user", {}).get("email")
                 )

@@ -70,9 +70,9 @@ pages = [
     "Data Plotting",
     "Preprocessing",
     "Inference",
-    "Settings",
     "Connect",
-    "Challenge"
+    "Challenge",
+    "Settings"
 ]
 
 if "page" not in st.session_state:
@@ -95,18 +95,18 @@ elif page == "Preprocessing":
     preprocessing.render()
 elif page == "Inference":
     inference.render()
-elif page == "Settings":
-    settings.render()
 elif page == "Connect":
     connect.render()
 elif page == "Challenge":
     challenge.render()
+elif page == "Settings":
+    settings.render()
 
 st.sidebar.markdown("---")
 st.sidebar.markdown('<span style="font-size: 11px;">Author:\nJoao Andre Ndombasi *Diakusala*</span>', unsafe_allow_html=True)
 st.sidebar.markdown('<span style="font-size: 12px;">GitHub:\nhttps://github.com/njadNissi</span>', unsafe_allow_html=True)
 st.sidebar.markdown('<span style="font-size: 12px;">🔗:\nhttps://bwania-solution.netlify.app/</span>', unsafe_allow_html=True)
-st.sidebar.markdown('<span style="font-size: 12px;">📧:\nnjadnissi@gmail.com</span>', unsafe_allow_html=True)
+st.sidebar.markdown('<span style="font-size: 12px;">📧:\nsecretariat.bwania@gmail.com</span>', unsafe_allow_html=True)
 
 st.sidebar.markdown("---")
 login.logout()

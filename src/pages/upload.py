@@ -162,21 +162,23 @@ def render():
         if df is None:
             st.warning("No dataset loaded")
 
-            n_rows = st.number_input("Number of rows", min_value=1, value=10)
+            cols = st.columns([4, 2])
+            with cols[0]:
+                n_rows = st.number_input("Number of rows", min_value=1, value=10)
+            with cols[1]:
+                try:
+                    if st.button("➕ Create Dataset"):
+                        df = pd.DataFrame({
+                            "x0": ["0"]*n_rows,
+                            "x1": ["0"]*n_rows,
+                            "y": ["0"]*n_rows
+                        })
 
-            try:
-                if st.button("➕ Create Dataset"):
-                    df = pd.DataFrame({
-                        "x0": ["0"]*n_rows,
-                        "x1": ["0"]*n_rows,
-                        "y": ["0"]*n_rows
-                    })
-
-                    update_data(df)
-                    st.session_state["history"] = [("Created Dataset", df.copy())]
-                    st.rerun()
-            except Exception as e:
-                st.error(f"❌ Error: {e}")
+                        update_data(df)
+                        st.session_state["history"] = [("Created Dataset", df.copy())]
+                        st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Error: {e}")
 
         else:
             # -----------------------------
