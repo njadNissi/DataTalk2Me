@@ -2,7 +2,7 @@
 import streamlit as st
 import pickle
 import pandas as pd
-from src.core.auth import update_user_purposes, set_user_visibility, get_active_users
+from src.core.database import update_user_purposes, set_user_visibility, get_active_users
 import src.core.utils as utils
 import gzip
 
@@ -97,3 +97,12 @@ def render():
             if not st.session_state.dev_mode:
                 update_user_purposes(user_data["email"], selected)
                 utils.temp_show("✅ Your choices updated successfully...", 'success', 1.0)
+
+                
+
+    st.markdown("---")
+    st.markdown("**About Author**")
+    st.markdown('<span style="font-size: 14px;">Name:\nJoao Andre Ndombasi *Diakusala*</span>', unsafe_allow_html=True)
+    st.markdown('<span style="font-size: 14px;">GitHub:\nhttps://github.com/njadNissi</span>', unsafe_allow_html=True)
+    st.markdown('<span style="font-size: 14px;">🔗:\nhttps://bwania-solution.netlify.app/</span>', unsafe_allow_html=True)
+    st.markdown('<span style="font-size: 14px;">📧:\nsecretariat.bwania@gmail.com</span>', unsafe_allow_html=True)

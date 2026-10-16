@@ -4,7 +4,7 @@ import pickle
 import io
 import pandas as pd
 import gzip
-from src.core.auth import (
+from src.core.database import (
     get_all_users, get_active_users, get_conversation_history, get_recent_contacts,
     send_message, mark_message_as_read
 )

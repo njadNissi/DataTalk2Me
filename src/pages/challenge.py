@@ -5,7 +5,7 @@ import gzip
 import pickle
 import pandas as pd
 import numpy as np
-from src.core.auth import db_get_challenges, db_create_challenge, db_update_challenge
+from src.core.database import db_get_challenges, db_create_challenge, db_update_challenge
 import src.core.utils as utils
 
 

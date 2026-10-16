@@ -1,27 +1,28 @@
 import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent))
-import pickle
 import streamlit as st
-st.set_page_config(page_title="Talk2Me", layout="wide")
+
+# --------------------------
+# AUTH FIRST (ONLY ONE CONFIG CALL)
+# --------------------------
+st.set_page_config(
+    page_title="Data-Talk2Me",
+    page_icon="data/logos/logo_orig.png",
+    layout="wide"
+)
+
 from src.pages import (
     upload, data_plotting, inference, login,
-    preprocessing, feature_eng_analysis,settings,connect, challenge
+    preprocessing, feature_eng_analysis, settings, connect, challenge
 )
-import sys
-
-# --------------------------
-# AUTH FIRST
-# --------------------------
-st.set_page_config(layout="wide",
-                   page_title="Data-Talk2Me.",
-                   page_icon="data/logos/logo_orig.png")
 
 # 🔥 DEV MODE AUTO-DETECTION
-DEV_MODE = "--dev" in sys.argv # RUN as: reamlit run app.py -- --dev (-- → tells Streamlit: “all args after this are for MY app, not for Streamlit”)
+DEV_MODE = "--dev" in sys.argv 
 
-# DEV USER (auto-login)
-st.session_state.dev_mode = False
+if "dev_mode" not in st.session_state:
+    st.session_state.dev_mode = False
+
 if DEV_MODE:
     st.session_state.logged_in = True
     st.session_state.dev_mode = True
@@ -33,36 +34,25 @@ if DEV_MODE:
         "last_use": "2025-01-01",
         "usage_purpose": ["Development"]
     }
-    st.session_state.active_users = [
-        {'user_name': 'Anjie 安杰', 'email': '3507497566@qq.com', 'last_use': '2026-10-14', 'usage_purpose': ['🐍 Python programming learning']},
-        {'user_name': 'Njad Nissi', 'email': 'njadnissi@gmail.com', 'last_use': '2026-10-14', 'usage_purpose': ['🧪 Coding exercises & challenges', '📝 Pseudocode & logic design']}
-    ]
-# ===============================================================================
 
+# Initialize authentication session state variables
 login.init_auth()
-login.check_auto_login()
 
-if not st.session_state.logged_in:
+# If not logged in, render the login page and stop execution here
+if not st.session_state.get("logged_in", False):
     login.render()
-    st.stop()  # STOP APP HERE UNTIL LOGIN
+    st.stop()  
 
 # --------------------------
 # APP STARTS HERE (AFTER LOGIN)
 # --------------------------
-# Display logo in sidebar
 with st.sidebar:
-    st.image("data/logos/logo_nobg.png", width=200)  # Adjust width as needed
+    st.image("data/logos/logo_nobg.png", width=200)
     st.title("Data-Talk2Me")
 
-
-# --------------------------
-# SHOW USER INFO + USERNAME IN SIDEBAR
-# --------------------------
-login.show_user_info()
-# --------------------------
-# ✅ LOGOUT BUTTON
-# --------------------------
 st.sidebar.markdown("---")
+# Show user info & logout button in sidebar
+login.show_user_info()
 
 pages = [
     "Upload Data",
@@ -77,12 +67,12 @@ pages = [
 
 if "page" not in st.session_state:
     st.session_state["page"] = "Upload Data"
+
 page = st.sidebar.radio(
     "Navigation",
     pages,
-    index=pages.index(st.session_state["page"])
+    index=pages.index(st.session_state["page"]) if st.session_state["page"] in pages else 0
 )
-
 st.session_state["page"] = page
 
 if page == "Upload Data":
@@ -102,11 +92,8 @@ elif page == "Challenge":
 elif page == "Settings":
     settings.render()
 
-st.sidebar.markdown("---")
-st.sidebar.markdown('<span style="font-size: 11px;">Author:\nJoao Andre Ndombasi *Diakusala*</span>', unsafe_allow_html=True)
-st.sidebar.markdown('<span style="font-size: 12px;">GitHub:\nhttps://github.com/njadNissi</span>', unsafe_allow_html=True)
-st.sidebar.markdown('<span style="font-size: 12px;">🔗:\nhttps://bwania-solution.netlify.app/</span>', unsafe_allow_html=True)
-st.sidebar.markdown('<span style="font-size: 12px;">📧:\nsecretariat.bwania@gmail.com</span>', unsafe_allow_html=True)
 
 st.sidebar.markdown("---")
+st.sidebar.markdown("**Author**")
+st.sidebar.markdown('<span style="font-size: 12px;">Joao Andre Ndombasi *Diakusala*</span>', unsafe_allow_html=True)
 login.logout()
