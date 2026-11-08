@@ -24,13 +24,22 @@ def render():
     cols = st.columns(6)
     is_visible = user_data.get("is_visible", True)
     with cols[0]:
-        st.write(f"**Name:** {user_data.get('user_name', 'N/A')}")
+        picture_url = user_data.get("picture")
+        if picture_url:
+            st.markdown(
+                f"""
+                <div style="display: flex; justify-content: center; margin-bottom: 8px;">
+                    <img src="{picture_url}" referrerpolicy="no-referrer" style="width: 72px; height: 72px; border-radius: 50%; object-fit: cover; border: 2px solid #dadce0; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
     with cols[1]:
-        st.write(f"**Email:** {user_data.get('email', 'N/A')}")
+        st.write(f"**Name:** {user_data.get('user_name', 'N/A')}")
     with cols[2]:
-        st.write(f"**First Use:** {user_data.get('first_use', 'N/A')}")
+        st.write(f"**Email:** {user_data.get('email', 'N/A')}")
     with cols[3]:
-        st.write(f"**Last Use:** {user_data.get('last_use', 'N/A')}")
+        st.write(f"**First Use:** {user_data.get('first_use', 'N/A')}")
     with cols[4]:
         st.write(f"**Login Times:** {use_times}")
     with cols[5]:

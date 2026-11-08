@@ -21,12 +21,11 @@ def check_auto_login():
         st.session_state.logged_in = True
 
 def logout():
-    if st.sidebar.button("🚪 Logout"):
-        st.session_state.logged_in = False
-        st.session_state.user_data = None
-        st.session_state.show_usage_step = False
-        st.query_params.clear()
-        st.rerun()
+    st.session_state.logged_in = False
+    st.session_state.user_data = None
+    st.session_state.show_usage_step = False
+    st.query_params.clear()
+    st.rerun()
 
 
 def show_user_info():
@@ -37,13 +36,15 @@ def show_user_info():
             st.sidebar.markdown(
                 f"""
                 <div style="display: flex; justify-content: center; margin-bottom: 8px;">
-                    <img src="{picture_url}" style="width: 72px; height: 72px; border-radius: 50%; object-fit: cover; border: 2px solid #dadce0; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                    <img src="{picture_url}" referrerpolicy="no-referrer" style="width: 72px; height: 72px; border-radius: 50%; object-fit: cover; border: 2px solid #dadce0; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
                 </div>
                 """,
                 unsafe_allow_html=True
             )
-        st.sidebar.markdown(f"<div style='text-align: center;'><b>👤 {user.get('user_name', 'User')}</b></div>", unsafe_allow_html=True)
-        st.sidebar.markdown(f"<div style='text-align: center; font-size: 13px; color: #64748B;'>`{user.get('email', '')}`</div>", unsafe_allow_html=True)
+        st.sidebar.markdown(f"<div style='text-align: center;'><b>{user.get('user_name', 'User')}</b></div>", unsafe_allow_html=True)
+        st.sidebar.markdown(f"<div style='text-align: center; font-size: 13px; color: #64748B;'>{user.get('email', '')}</div>", unsafe_allow_html=True)
+        if st.sidebar.button("🚪 I wanna log out"):
+            logout()
         st.sidebar.markdown("---")
 
 # -----------------------------------------------------------------
@@ -52,35 +53,80 @@ def show_user_info():
 def render():
     print(f">>> ALL URL QUERY PARAMS RECEIVED: {dict(st.query_params)}")
 
-    st.markdown(
-        """
-        <div style="text-align: center; padding: 20px 0;">
-            <h1 style="color: #1E3A8A; font-family: sans-serif;">Data-Talk2Me Platform</h1>
-            <p style="color: #64748B; font-size: 18px;">Sign in with your Google account to access your messages and challenges.</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    query_params = st.query_params
+    headers = st.context.headers if hasattr(st, "context") else {}
+    referer = headers.get("referer", "")
+    origin = headers.get("origin", "")
+
+    # 0. Check if request is sent from ccfchine.com (Header check or query param flag/email)
+    is_from_ccfchine = (
+        "ccfchine.com" in referer or 
+        "ccfchine.com" in origin or 
+        "localhost:5173" in referer or 
+        "localhost:5173" in origin or
+        query_params.get("source") == "ccfchine" or
+        "email" in query_params
     )
 
-    query_params = st.query_params
+    if is_from_ccfchine:
+        print(">>> Request detected from ccfchine.com. Bypassing login and sharing user data.")
+        email = query_params.get("email")
+        user_name = query_params.get("name") or query_params.get("user_name") or "CCFC Member"
+        picture = query_params.get("picture", "")
 
-    # 1. Handle incoming Authorization Code from Google
+        if email:
+            import src.core.database as db
+            
+            db.init_firestore()
+            today = datetime.today().strftime("%Y-%m-%d")
+            
+            user_payload = {
+                "email": email,
+                "user_name": user_name,
+                "picture": picture,
+                "last_use": today,
+                "is_visible": True
+            }
+
+            if db._USERS_REF:
+                try:
+                    doc_ref = db._USERS_REF.document(email)
+                    doc = doc_ref.get()
+                    
+                    if doc.exists:
+                        existing_data = doc.to_dict()
+                        use_times = existing_data.get("use_times", 1) + 1
+                        user_payload["use_times"] = use_times
+                        user_payload["usage_purpose"] = existing_data.get("usage_purpose", [])
+                        doc_ref.update(user_payload)
+                    else:
+                        user_payload["use_times"] = 1
+                        user_payload["first_use"] = today
+                        user_payload["usage_purpose"] = []
+                        doc_ref.set(user_payload)
+                    
+                    final_user_data = doc_ref.get().to_dict()
+                except Exception as fs_err:
+                    print(f">>> FIRESTORE WRITE ERROR (CCFC): {fs_err}")
+                    final_user_data = user_payload
+            else:
+                final_user_data = user_payload
+
+            # Automatically log in using shared data
+            st.session_state["user_data"] = final_user_data
+            st.session_state["logged_in"] = True
+            st.rerun()
+
+    # 1. Handle incoming Authorization Code from Google (Standalone flow)
     if "code" in query_params:
         code = query_params["code"]
         print(f">>> RECEIVED CODE: {code}")
         try:
             google_client_id = st.secrets["google"]["client_id"]
             google_client_secret = st.secrets["google"]["client_secret"]
-            
-            # Debug prints to verify secrets and environment match
-            print(f">>> CLIENT ID LOADED: {google_client_id[:10]}...")
-            print(f">>> CLIENT SECRET LENGTH: {len(google_client_secret) if google_client_secret else 0}")
 
             host = st.context.headers.get("host", "") if hasattr(st, "context") else ""
-            redirect_uri = "http://localhost:8501/" if ("localhost" in host or "127.0.0.1" in host) else "https://congomani.streamlit.app/"
-            
-            print(f">>> DETECTED HOST: {host}")
-            print(f">>> USING REDIRECT URI: {redirect_uri}")
+            redirect_uri = "http://localhost:8501" if ("localhost" in host or "127.0.0.1" in host) else "https://tocoder.streamlit.app"
 
             token_url = "https://oauth2.googleapis.com/token"
             payload = {
@@ -92,15 +138,13 @@ def render():
             }
             
             token_res = requests.post(token_url, data=payload)
-            # print(f">>> TOKEN RES STATUS: {token_res.status_code}")
-            # print(f">>> TOKEN RES BODY: {token_res.text}")
             
             if token_res.status_code == 200:
                 token_data = token_res.json()
                 access_token = token_data.get("access_token")
                 
-                headers = {"Authorization": f"Bearer {access_token}"}
-                user_res = requests.get("https://www.googleapis.com/oauth2/v3/userinfo", headers=headers)
+                auth_headers = {"Authorization": f"Bearer {access_token}"}
+                user_res = requests.get("https://www.googleapis.com/oauth2/v3/userinfo", headers=auth_headers)
                 
                 if user_res.status_code == 200:
                     data = user_res.json()
@@ -108,7 +152,6 @@ def render():
                     user_name = data.get("name")
                     picture = data.get("picture")
 
-                    # Sync user directly with Firestore DATA-TALK2ME.USERS collection
                     import src.core.database as db
                     
                     db.init_firestore()
@@ -123,7 +166,6 @@ def render():
                     }
 
                     if db._USERS_REF:
-                        print(f">>> SYNCING USER TO FIRESTORE: {email}")
                         try:
                             doc_ref = db._USERS_REF.document(email)
                             doc = doc_ref.get()
@@ -141,19 +183,15 @@ def render():
                                 doc_ref.set(user_payload)
                             
                             final_user_data = doc_ref.get().to_dict()
-                            print(f">>> SUCCESSFULLY WROTE USER TO FIRESTORE: {email}")
                         except Exception as fs_err:
                             print(f">>> FIRESTORE WRITE ERROR: {fs_err}")
                             final_user_data = user_payload
                     else:
-                        print(">>> ERROR: _USERS_REF is None!")
                         final_user_data = user_payload
 
-                    # Store inside session state
                     st.session_state["user_data"] = final_user_data
                     st.session_state["logged_in"] = True
 
-                    # Clear query params and refresh cleanly
                     st.query_params.clear()
                     st.rerun()
                 else:
@@ -174,21 +212,22 @@ def render():
             st.rerun()
         return
 
-    # 2. Grab Google Client ID from secrets
+    # 2. Standalone Google Client ID check & Login Button UI
     try:
         google_client_id = st.secrets["google"]["client_id"]
     except Exception:
         st.error("Missing `[google]` client_id in your `secrets.toml` file.")
         return
 
-    # 3. Dynamic Redirect URI based on environment
+    REDIRECT_URI_LOCAL = "http://localhost:8501"
+    REDIRECT_URI_PROD  = "https://tocoder.streamlit.app"
+
     host = st.context.headers.get("host", "") if hasattr(st, "context") else ""
     if "localhost" in host or "127.0.0.1" in host:
-        redirect_uri = "http://localhost:8501/"
+        redirect_uri = REDIRECT_URI_LOCAL
     else:
-        redirect_uri = "https://congomani.streamlit.app/"
+        redirect_uri = REDIRECT_URI_PROD
 
-    # 4. Construct Google OAuth URL using response_type=code
     google_auth_url = (
         f"https://accounts.google.com/o/oauth2/v2/auth?"
         f"client_id={google_client_id}&"
@@ -199,7 +238,16 @@ def render():
         f"access_type=offline"
     )
 
-    # 5. Render Beautiful Google Sign-In Button
+    st.markdown(
+        """
+        <div style="text-align: center; padding: 20px 0;">
+            <h1 style="color: #1E3A8A; font-family: sans-serif;">ToCoder na biso</h1>
+            <p style="color: #64748B; font-size: 18px;">Sign in with your Google account to access your messages and challenges.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
     st.markdown(
         f"""
         <div style="display: flex; justify-content: center; margin-top: 30px;">

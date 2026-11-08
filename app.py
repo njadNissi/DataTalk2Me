@@ -7,14 +7,15 @@ import streamlit as st
 # AUTH FIRST (ONLY ONE CONFIG CALL)
 # --------------------------
 st.set_page_config(
-    page_title="Data-Talk2Me",
+    page_title="ToCoder",
     page_icon="data/logos/logo_orig.png",
     layout="wide"
 )
 
 from src.pages import (
     upload, data_plotting, inference, login,
-    preprocessing, feature_eng_analysis, settings, connect, challenge
+    preprocessing, feature_eng_analysis, settings, connect, challenge,
+    ml
 )
 
 # 🔥 DEV MODE AUTO-DETECTION
@@ -48,9 +49,8 @@ if not st.session_state.get("logged_in", False):
 # --------------------------
 with st.sidebar:
     st.image("data/logos/logo_nobg.png", width=200)
-    st.title("Data-Talk2Me")
+    # st.title("Data-Talk2Me")
 
-st.sidebar.markdown("---")
 # Show user info & logout button in sidebar
 login.show_user_info()
 
@@ -62,6 +62,7 @@ pages = [
     "Inference",
     "Connect",
     "Challenge",
+    "Tuto",
     "Settings"
 ]
 
@@ -89,6 +90,8 @@ elif page == "Connect":
     connect.render()
 elif page == "Challenge":
     challenge.render()
+elif page == "Tuto":
+    ml.render()
 elif page == "Settings":
     settings.render()
 
@@ -96,4 +99,3 @@ elif page == "Settings":
 st.sidebar.markdown("---")
 st.sidebar.markdown("**Author**")
 st.sidebar.markdown('<span style="font-size: 12px;">Joao Andre Ndombasi *Diakusala*</span>', unsafe_allow_html=True)
-login.logout()
